@@ -26,13 +26,19 @@ The goal of this portfolio is to demonstrate practical offensive security skills
 - **Exploitation:** Achieved RCE via a file upload and execution chain.
 - **Access:** Gained a stable Meterpreter session using the Metasploit Framework.
 
----
-
 ## Technical Focus Areas
 - **Network Penetration Testing:** SMB, RDP, HTTP/IIS, and service fingerprinting.
 - **Protocol Analysis:** Understanding NLA, NetBIOS, and SMB signing configurations.
 - **Tool Mastery:** Metasploit Framework, Hydra, Nmap, and xfreerdp.
 - **Exploitation Chains:** Moving from reconnaissance to initial access and post-exploitation.
+
+## Windows: WinRM Exploitation (Credential Attack + Remote Execution)
+- **Objective:** Identify an exposed WinRM service, obtain valid credentials through brute-force, and gain remote command execution.
+- **Methodology:** Discovered WinRM on port 5985 using Nmap, performed credential brute-force against the administrator account using CrackMapExec, and validated access via remote command execution.
+- **Initial Access:** Leveraged valid credentials with Metasploit (`winrm_script_exec`) to establish a Meterpreter session and execute commands on the target system.
+- **Technical Insight:** Used default execution method (PowerShell) by keeping `FORCE_VBS` disabled, allowing more stable payload delivery. Alternative execution methods can be used if restrictions are present.
+- **Post-Exploitation:** Verified access, navigated the system, and retrieved the flag confirming successful compromise.
+- **Impact:** Demonstrates that exposed WinRM services combined with weak credentials provide a direct path to full system compromise without requiring traditional exploits.
 
 ---
 
