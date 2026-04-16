@@ -1,0 +1,161 @@
+\chapter{Footprinting \& Network Scanning}
+\label{ch:footprinting}
+
+Once passive recon is done, active scanning starts. This phase maps the live
+hosts, open ports, and running services. Nmap is the primary tool. Everything
+feeds into enumeration and eventually exploitation.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Network Mapping --- Finding Live Hosts}
+\label{sec:network_mapping}
+
+Before scanning ports, I confirm which hosts are actually alive on the network.
+Scanning ports on dead hosts wastes time.
+
+\begin{termbox}
+# Find your own IP to understand the network range
+ip a s
+ifconfig
+
+# Ping sweep to find live hosts in a range
+nmap -sn 192.168.1.0/24
+
+# Scan a list of IPs from a file
+nmap -sn -iL targets.txt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-07-17_at_4.42.11_PM.png}{Nmap ping sweep identifying live hosts on the network}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Host Discovery with Nmap}
+\label{sec:host_discovery}
+
+\subsection{Basic Port Scan}
+
+\begin{termbox}
+nmap target_ip                    # Default scan (top 1000 ports)
+nmap -p- target_ip                # All 65535 ports (slow but thorough)
+nmap -p 22,80,443,445 target_ip   # Specific ports only
+\end{termbox}
+
+\subsection{Service and Version Detection}
+
+\begin{whybox}[Why -sV matters]
+Knowing a port is open is not enough. Version detection tells me the exact software
+running, which I can cross-reference with exploit databases. Port 445 open is
+interesting --- port 445 running SMBv1 on Windows 7 is a confirmed EternalBlue target.
+\end{whybox}
+
+\begin{termbox}
+nmap -sV target_ip               # Version detection
+nmap -sV -sC target_ip           # Version + default NSE scripts
+nmap -sV -sC -p- target_ip       # All ports, version, scripts
+nmap -sV -sC -O target_ip        # Add OS detection
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-07-19_at_3.38.46_PM.png}{Nmap -sV -sC output showing services and versions}
+
+\screenshot{assets/images/Screenshot_2025-07-19_at_3.43.55_PM.png}{Nmap OS detection and script results}
+
+\subsection{Stealth Scan}
+
+\begin{termbox}
+nmap -sS target_ip               # SYN (stealth) scan --- does not complete TCP handshake
+nmap -f target_ip                # Packet fragmentation (may evade basic filters)
+\end{termbox}
+
+\begin{notebox}
+\ic{-sS} sends SYN packets and waits for SYN-ACK without completing the handshake.
+Faster than a full connect scan and less likely to be logged by the application layer,
+though still visible at the network level.
+\end{notebox}
+
+\subsection{Metasploit Integration --- db\_nmap}
+
+Nmap can be run from inside Metasploit. Results are automatically saved to the
+workspace database, making them queryable with \ic{hosts}, \ic{services}, and
+\ic{vulns}.
+
+
+
+\begin{termbox}
+# Inside msfconsole
+service postgresql start && msfconsole
+workspace -a project_name         # Create isolated workspace
+setg RHOSTS target_ip             # Set target globally (all modules inherit this)
+setg RHOST target_ip
+
+db_nmap -sS -sV -o target_ip     # Run nmap, save to DB
+hosts                             # View discovered hosts
+services                          # View discovered services
+\end{termbox}
+
+\begin{notebox}
+
+\screenshot{assets/images/Screenshot_2025-07-28_at_10.39.09_PM.png}{db\_nmap saving scan results to Metasploit database}
+
+\begin{notebox}
+\ic{setg} sets a global option that persists across all modules in the session.
+\ic{set} only applies to the currently loaded module. Always use \ic{setg RHOSTS}
+and \ic{setg RHOST} at the start to avoid repeating yourself.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Web Server Scanning}
+\label{sec:web_scanning}
+
+\begin{termbox}
+# Find web directories and technologies
+nmap --script http-enum -sV -p 80,443 target_ip
+
+# Check for specific vulnerabilities
+nmap -sV --script=http-enum -p 80 target_ip
+
+# Run dirb for directory brute-force (if http-enum is slow)
+dirb http://target_ip
+dirb http://target_ip /usr/share/dirb/wordlists/common.txt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-07-29_at_10.54.33_PM.png}{Web server enumeration using nmap http-enum script}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Learning Output}
+\label{sec:scanning_learning}
+
+\begin{takebox}
+\textbf{What I Learned}
+\begin{itemize}
+  \item \ic{-sV -sC} together is my default scan. It gives version info and runs
+        useful scripts automatically --- especially valuable for SMB, HTTP, and SSH.
+  \item Running nmap from inside Metasploit saves time later. I don't have to
+        manually re-enter IPs into modules --- the database already has everything.
+  \item \ic{setg RHOST} and \ic{setg RHOSTS} at the start of a session is habit I
+        built quickly after forgetting to set the IP on the third exploit attempt.
+\end{itemize}
+
+\textbf{Enumeration Mindset --- What to Check First}
+\begin{enumerate}
+  \item \ic{nmap -sn 192.168.x.0/24} --- confirm which hosts are alive
+  \item \ic{nmap -sV -sC -p- target\_ip} --- full port scan with version and scripts
+  \item Cross-reference open ports with known vulnerabilities in searchsploit
+  \item Feed results into Metasploit workspace for tracking
+\end{enumerate}
+
+\textbf{Common Mistakes}
+\begin{itemize}
+  \item Scanning only the top 1000 ports and missing something on a high port
+  \item Not running \ic{-sC} and missing SMB signing info or HTTP server details
+        that NSE scripts provide automatically
+  \item Forgetting to start PostgreSQL before msfconsole --- the DB won't connect
+        and \ic{db\_nmap} won't save anything
+\end{itemize}
+
+\textbf{Real-World Impact}
+\begin{itemize}
+  \item Open port 445 with SMBv1 = immediate EternalBlue candidate
+  \item Open port 80 with \ic{/webdav/} returning 401 = WebDAV attack surface
+  \item Open port 3306 (MySQL) with no authentication = critical data exposure
+\end{itemize}
+\end{takebox}
+
+\end{notebox}

@@ -1,0 +1,182 @@
+\chapter{Host \& Network Security Auditing}
+\label{ch:auditing}
+
+Security auditing is not the same as penetration testing. Auditing checks whether
+a system complies with security standards and policies. Penetration testing checks
+whether it can be broken. Both are needed, and a pentester should understand where
+auditing ends and testing begins.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{What Security Auditing Is}
+\label{sec:what_auditing}
+
+\textbf{Definition:} Checking that everyone is following the rules and regulations
+to secure systems. Auditing identifies risks to security --- anything that does not
+comply with standards, regulations, or organisational policy.
+
+\textbf{Why organisations do it:}
+\begin{itemize}
+  \item Risk management --- prioritise threats based on severity
+  \item Identify loop holes before attackers do
+  \item Build customer and regulatory confidence
+  \item Compliance requirements (GDPR, HIPAA, ISO 27001, PCI-DSS)
+  \item Ongoing process --- not a one-time event
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Auditing vs Penetration Testing}
+\label{sec:audit_vs_pentest}
+
+\begin{notebox}
+The relationship between the two: first conduct a security audit, then apply
+the recommended remediations, then perform penetration testing to verify whether
+the remediations actually fixed the problems.
+\end{notebox}
+
+\begin{longtable}{p{4cm} p{4cm} p{4cm}}
+  \toprule
+  \textbf{Aspect} & \textbf{Security Audit} & \textbf{Penetration Test} \\
+  \midrule
+  \textbf{Goal} & Compliance \& risk identification & Active exploitation \\
+  \textbf{Method} & Review + interview + scan & Attack simulation \\
+  \textbf{Output} & Compliance report & Vulnerability + exploit report \\
+  \textbf{Timing} & Ongoing / periodic & After audit remediation \\
+  \bottomrule
+\end{longtable}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Audit Phases}
+\label{sec:audit_phases}
+
+\begin{enumerate}
+  \item \textbf{Planning} --- define goals, understand existing documentation,
+        schedule, scope
+  \item \textbf{Information Gathering} --- number of computers, policies,
+        employee access controls, encryption status, remote working risks
+  \item \textbf{Field Work} --- actual audit execution, checking configurations,
+        running vulnerability scans, interviewing staff
+  \item \textbf{Analysis} --- compare findings against standards, identify
+        improvement areas and weaknesses
+  \item \textbf{Reporting} --- full findings report, improvement recommendations,
+        gap analysis against the standard
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Types of Auditing}
+\label{sec:audit_types}
+
+\begin{itemize}
+  \item \textbf{Access control audit} --- checking that only authorised persons
+        access specific data and systems
+  \item \textbf{Third-party audit} --- external auditors perform the assessment
+  \item \textbf{Compliance audit} --- checking against government or industry
+        standards (GDPR for EU data, HIPAA for patient data)
+  \item \textbf{Technical audit} --- firewall rules, Linux hardening, network
+        configuration, open ports
+  \item \textbf{Network audit} --- open ports, security level, router testing
+  \item \textbf{Web application audit} --- SQL injection, cross-site scripting,
+        authentication flaws (using tools like Burp Suite)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{NIST Framework}
+\label{sec:nist}
+
+NIST (National Institute of Standards and Technology) provides security
+frameworks and guidelines that organisations use to develop security policies.
+Understanding NIST codes is relevant because reports and remediation recommendations
+often reference them.
+
+\begin{notebox}
+As a pentester, understanding NIST is important for writing reports that clients
+and their compliance teams can act on. A finding mapped to a NIST control number
+carries more weight than a plain description.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Lynis --- Linux System Auditing Tool}
+\label{sec:lynis}
+
+\tool{Lynis} performs local system audits --- it checks security hardening, installed
+packages, kernel parameters, and configuration files. Used to audit the system
+you are logged into.
+
+
+
+\begin{termbox}
+# Install
+cd /opt/
+gzip -d lynis-3.1.1.tar.gz
+tar -xf lynis-3.1.1.tar
+cd lynis/
+chmod +x lynis
+
+# Check system version
+cat /etc/*issue
+
+# Run a full system audit
+./lynis audit system
+
+# Run a specific test
+./lynis audit system --tests HRDN-7230
+
+# Run with auditor name in report
+./lynis audit system --auditor "YourName"
+\end{termbox}
+
+\begin{notebox}
+
+\begin{notebox}
+Each Lynis finding includes a code (e.g., \ic{HRDN-7230}) and a remediation
+suggestion. Click the code in the report for the full hardening recommendation.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Network Audit --- Practical Checklist}
+\label{sec:network_audit}
+
+\begin{termbox}
+# Step 1 --- Network discovery
+nmap -sn 192.168.x.0/24             # Live hosts
+
+# Step 2 --- Port and service scan
+nmap -sV -sC target_ip              # All services and versions
+
+# Step 3 --- Vulnerability scanning
+# Use Nessus (see Chapter 4) or MSF db_nmap
+
+# Step 4 --- SSH authentication check
+# Verify password-based auth is restricted
+hydra -l root -P /usr/share/seclists/Passwords/xato-net-10-million-passwords.txt \
+  ssh://target_ip:22 -t 2 -v
+# If this finds a password, password auth is enabled and the password policy is weak
+\end{termbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Penetration Test Report Structure}
+\label{sec:pentest_report}
+
+Every penetration test must produce a formal report. The structure I follow:
+
+\begin{enumerate}
+  \item \textbf{Executive Summary} --- high-level overview for non-technical readers
+  \item \textbf{Methodology} --- tools used, phases followed
+  \item \textbf{Findings} --- each vulnerability with severity, description,
+        evidence (screenshots), and impact
+  \item \textbf{Recommendations} --- specific steps to fix each finding
+\end{enumerate}
+
+\begin{takebox}
+\textbf{Key Takeaways}
+\begin{itemize}
+  \item Auditing and penetration testing complement each other. Audit first,
+        remediate, then pentest to verify.
+  \item Lynis is the fastest way to get a security baseline on a Linux system.
+  \item SSH with password authentication enabled and a weak password is a finding
+        that will appear in almost every real audit. It comes up constantly.
+  \item Understanding NIST matters for writing professional reports, not just
+        running tools.
+\end{itemize}
+\end{takebox}
+
+\end{notebox}

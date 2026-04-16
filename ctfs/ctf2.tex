@@ -1,0 +1,89 @@
+\chapter{CTF 3 --- Web Application Assessment}
+\label{ctf:ctf3}
+
+\begin{notebox}[Target overview]
+Web application CTF with four flags hidden across different web technologies
+and paths. Required combining nmap script scanning, robots.txt analysis,
+phpinfo inspection, and directory discovery.
+\end{notebox}
+
+\section*{Flag 1 --- Exposed .git Repository}
+
+\begin{termbox}
+nmap -sC -sV target_ip
+# Found: /.git/ repository exposed on port 80
+# Browse to: http://target_ip/.git/
+\end{termbox}
+
+An exposed \ic{.git} directory was detected by nmap's script scan on port 80.
+Opened it directly in the browser and found flag 1.
+
+\begin{takebox}
+\textbf{Lesson:} Exposed \ic{/.git/} repositories are a critical finding in real
+engagements --- they expose the entire source code history, including any
+credentials or API keys ever committed to the repo. Always check for this.
+\end{takebox}
+
+\screenshot{assets/images/Screenshot_2025-12-15_at_8.20.21_AM.png}{Exposed .git directory accessible in browser containing flag 1}
+
+\section*{Flag 2 --- phpMyAdmin Database Access}
+
+
+
+\begin{termbox}
+# robots.txt revealed /phpmyadmin path
+curl http://target_ip/robots.txt
+# Browse to: http://target_ip/phpmyadmin
+
+# Login with default credentials
+# Once inside: search for flag in database tables
+\end{termbox}
+
+\begin{takebox}
+
+\ic{robots.txt} listed \ic{/phpmyadmin} as a path to not index. Opened it,
+got access to the database, searched the tables, and found flag 2.
+
+\begin{takebox}
+\textbf{Lesson:} phpMyAdmin exposed to the web is a critical misconfiguration.
+Default or weak credentials give full database access instantly.
+\end{takebox}
+
+\section*{Flag 3 --- phpinfo.php Hidden File}
+
+\begin{termbox}
+# Standard http-enum script did not find it
+nmap -sV --script=http-enum -p 80 target_ip
+# Found: /phpinfo.php and other files
+
+# Browse to the file
+curl http://target_ip/phpinfo.php | grep -i flag
+\end{termbox}
+
+The deeper \ic{http-enum} script scan found \ic{/phpinfo.php}. The flag was
+embedded somewhere in the phpinfo output --- searched the page for it.
+
+\section*{Flag 4 --- /passwords Directory}
+
+\begin{termbox}
+# Also in robots.txt
+curl http://target_ip/robots.txt
+# Revealed: /passwords path
+
+curl http://target_ip/passwords
+\end{termbox}
+
+The \ic{robots.txt} file revealed a \ic{/passwords} directory. Opened it
+directly and found flag 4.
+
+\begin{checkbox}
+\begin{itemize}
+  \item[$\checkmark$] \textbf{Flag 1} --- Exposed \ic{/.git/} repository on port 80
+  \item[$\checkmark$] \textbf{Flag 2} --- phpMyAdmin with default/weak credentials
+  \item[$\checkmark$] \textbf{Flag 3} --- \ic{/phpinfo.php} found via nmap http-enum
+  \item[$\checkmark$] \textbf{Flag 4} --- \ic{/passwords} directory in robots.txt
+\end{itemize}
+\end{checkbox}
+
+
+\end{takebox}

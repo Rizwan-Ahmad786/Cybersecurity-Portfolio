@@ -1,0 +1,155 @@
+\chapter{CTF 4 --- Vulnerability Assessment}
+\label{ctf:ctf4}
+
+\begin{notebox}[Target overview]
+Vulnerability assessment CTF requiring identification and exploitation of web
+application vulnerabilities across multiple attack surfaces. Each flag provided
+a hint for the next.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Tools Used}
+\begin{itemize}
+  \item \tool{nmap} --- port scanning and service detection
+  \item \tool{dirb} / \tool{gobuster} --- directory enumeration
+  \item \tool{curl} --- manual HTTP requests
+  \item Browser --- direct inspection of discovered paths
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 1 --- Exposed Version Control Repository}
+
+\textbf{Hint:} \textit{Explore hidden directories for version control artifacts
+that might reveal valuable information.}
+
+
+
+\begin{termbox}
+nmap -sC -sV target_ip
+# Found /.git/ repository on port 80
+# Browse to: http://target_ip/.git/
+\end{termbox}
+
+\begin{notebox}[Target overview]
+
+The nmap \ic{-sC} default script scan found a \ic{.git} repository exposed
+on port 80. Opened it in the browser and found flag 1.
+
+\begin{takebox}
+This is the second time a \ic{.git} exposure appeared in these CTFs. In real
+engagements this is a critical finding --- the entire version history of the
+application is exposed, including any secrets ever committed.
+\end{takebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 2 --- Database via phpMyAdmin}
+
+\textbf{Hint:} \textit{The data storage has some loose security measures. Can
+you find the flag hidden within it?}
+
+\end{notebox}
+
+\begin{termbox}
+# Check robots.txt first
+curl http://target_ip/robots.txt
+# Found: /phpmyadmin
+
+# Browse to http://target_ip/phpmyadmin
+# Login (default or weak credentials)
+# Search database tables for flag
+\end{termbox}
+
+\begin{takebox}
+
+\ic{robots.txt} revealed the phpMyAdmin path. Logged in, browsed the database
+tables, and found the flag stored as a value in one of the tables.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 3 --- phpinfo.php Server Information}
+
+\textbf{Hint:} \textit{A PHP file that displays server information might be worth
+examining. What could be hidden in plain sight?}
+
+\begin{termbox}
+# Deeper script scan to find hidden files
+nmap -sV --script=http-enum -p 80 192.232.28.3
+# Found: /phpinfo.php
+
+# Also discoverable via robots.txt (already checked above)
+# Browse to: http://target_ip/phpinfo.php
+# Search the page for the flag
+\end{termbox}
+
+The \ic{nmap --script=http-enum} scan found \ic{/phpinfo.php}. The phpinfo
+page exposes server configuration, PHP settings, and environment variables.
+The flag was embedded in the output.
+
+\begin{notebox}
+\ic{phpinfo.php} in production is a significant security risk. It reveals PHP
+version, server software, file paths, environment variables (including any
+hardcoded credentials), and loaded extensions. Flag or not, this is a finding
+worth documenting in a real report.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 4 --- Sensitive Directory from robots.txt}
+
+\textbf{Hint:} \textit{Sensitive directories might hold critical information.
+Search through carefully for hidden gems.}
+
+\begin{termbox}
+# Already found this from robots.txt check in flag 2
+# robots.txt revealed: /passwords
+
+curl http://target_ip/passwords
+# Or browse directly: http://target_ip/passwords
+\end{termbox}
+
+The same \ic{robots.txt} check that revealed phpMyAdmin also listed a
+\ic{/passwords} directory. Opened it directly --- flag 4 was there.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flags Summary}
+
+\begin{checkbox}
+\begin{itemize}
+  \item[$\checkmark$] \textbf{Flag 1} --- Exposed \ic{/.git/} (nmap \ic{-sC})
+  \item[$\checkmark$] \textbf{Flag 2} --- phpMyAdmin database access
+        (\ic{robots.txt} $\rightarrow$ login $\rightarrow$ table search)
+  \item[$\checkmark$] \textbf{Flag 3} --- \ic{/phpinfo.php}
+        (nmap \ic{--script=http-enum})
+  \item[$\checkmark$] \textbf{Flag 4} --- \ic{/passwords} directory
+        (\ic{robots.txt})
+\end{itemize}
+\end{checkbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Overall Lessons from All CTFs}
+
+\begin{takebox}
+\textbf{Patterns that appeared across every CTF:}
+\begin{itemize}
+  \item \ic{robots.txt} gave flags or hints in three out of four CTFs.
+        It is always the first check.
+  \item \ic{nmap -sC} (default scripts) found hidden directories and
+        exposed repositories that manual browsing would have missed.
+  \item phpMyAdmin with weak credentials appeared twice. Default/weak credentials
+        on admin interfaces is a recurring real-world vulnerability.
+  \item CTF flags leave hints for the next flag. Read the flag content carefully
+        before moving on.
+  \item Exposed \ic{/.git/} repositories appeared twice. This is a common
+        developer mistake that has real-world consequence.
+\end{itemize}
+
+\textbf{My CTF checklist (in order):}
+\begin{enumerate}
+  \item Port scan: \ic{nmap -sC -sV target}
+  \item Check \ic{/robots.txt}
+  \item Check \ic{/phpinfo.php}, \ic{/.git/}, \ic{/phpmyadmin}
+  \item Deep web scan: \ic{nmap --script=http-enum -p 80 target}
+  \item Directory brute-force: \ic{gobuster dir -u http://target -w wordlist}
+  \item For each found path: browse, check for flags, note hints
+\end{enumerate}
+\end{takebox}
+
+\end{takebox}

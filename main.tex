@@ -1,0 +1,278 @@
+\documentclass[11pt,a4paper,openany]{book}
+
+%% ── Packages ─────────────────────────────────────────────────────────────────
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.8cm,right=2.8cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\tcbuselibrary{listings,skins,breakable}
+\usepackage{mdframed}
+\usepackage{titlesec}
+\usepackage{titletoc}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{bookmark}
+
+%% ── Colours ──────────────────────────────────────────────────────────────────
+\definecolor{darkbg}{HTML}{1E1E1E}
+\definecolor{codefg}{HTML}{D4D4D4}
+\definecolor{accent}{HTML}{C0392B}
+\definecolor{accentblue}{HTML}{2980B9}
+\definecolor{accentgreen}{HTML}{27AE60}
+\definecolor{rulecolor}{HTML}{CCCCCC}
+\definecolor{midgrey}{HTML}{555555}
+\definecolor{titlebg}{HTML}{1A1A1A}
+\definecolor{sectionline}{HTML}{C0392B}
+\definecolor{whybg}{HTML}{FEF9F9}
+\definecolor{whyborder}{HTML}{E74C3C}
+\definecolor{notebg}{HTML}{FFFDE7}
+\definecolor{noteborder}{HTML}{F39C12}
+\definecolor{takebg}{HTML}{EBF5FB}
+\definecolor{takeborder}{HTML}{2980B9}
+\definecolor{warnbg}{HTML}{FFF3F3}
+\definecolor{warnborder}{HTML}{C0392B}
+\definecolor{checkbg}{HTML}{EAFAF1}
+\definecolor{checkborder}{HTML}{27AE60}
+
+%% ── Hyperref ─────────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,linkcolor=accent,urlcolor=accentblue,
+  pdftitle={eJPT Learning Journal},pdfauthor={Personal Notes},
+  bookmarksnumbered=true,bookmarksopen=true,
+}
+
+%% ── Caption style ────────────────────────────────────────────────────────────
+\captionsetup{font=small,labelfont={bf,color=midgrey},
+  textfont={it,color=midgrey},justification=centering,skip=4pt}
+
+%% ── Chapter / Section titles ─────────────────────────────────────────────────
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{titlebg}}
+  {\color{accent}\chaptertitlename\ \thechapter}{12pt}{\Huge}
+  [{\color{sectionline}\rule{\linewidth}{1.5pt}}]
+\titlespacing{\chapter}{0pt}{-10pt}{30pt}
+
+\titleformat{\section}
+  {\large\bfseries\color{titlebg}}{\color{accent}\thesection}{0.8em}{}
+  [{\color{rulecolor}\titlerule[0.6pt]}]
+\titlespacing{\section}{0pt}{18pt}{8pt}
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{titlebg}}{\color{midgrey}\thesubsection}{0.8em}{}
+\titlespacing{\subsection}{0pt}{12pt}{4pt}
+
+%% ── Header / Footer ──────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyhead[LE,RO]{\small\color{midgrey}\thepage}
+\fancyhead[RE]{\small\color{midgrey}\leftmark}
+\fancyhead[LO]{\small\color{midgrey}\rightmark}
+\fancyfoot[C]{\small\color{midgrey}eJPT Learning Journal --- Personal Lab Notes}
+
+%% ── Dark terminal code block ─────────────────────────────────────────────────
+\lstdefinestyle{terminal}{
+  backgroundcolor=\color{darkbg},
+  basicstyle=\ttfamily\footnotesize\color{codefg},
+  breaklines=true,keepspaces=true,showstringspaces=false,
+  frame=none,xleftmargin=10pt,xrightmargin=10pt,
+  aboveskip=4pt,belowskip=4pt,columns=fullflexible,
+}
+\newtcblisting{termbox}{
+  listing only,listing style=terminal,
+  colback=darkbg,colframe=darkbg,arc=3pt,boxrule=0pt,
+  left=6pt,right=6pt,top=5pt,bottom=5pt,breakable,
+  before skip=6pt,after skip=8pt,
+}
+
+%% ── Callout boxes via mdframed (supports nesting with termbox) ───────────────
+\newenvironment{whybox}[1][]{%
+  \vspace{4pt}%
+  \begin{mdframed}[backgroundcolor=whybg,linecolor=whyborder,linewidth=3pt,%
+    leftline=true,rightline=false,topline=false,bottomline=false,%
+    innerleftmargin=10pt,innerrightmargin=8pt,%
+    innertopmargin=6pt,innerbottommargin=6pt,%
+    skipabove=4pt,skipbelow=6pt]%
+  \small\ifx&#1&\else\textbf{#1}\par\smallskip\fi}%
+{\end{mdframed}\vspace{2pt}}
+
+\newenvironment{notebox}[1][Note]{%
+  \vspace{4pt}%
+  \begin{mdframed}[backgroundcolor=notebg,linecolor=noteborder,linewidth=3pt,%
+    leftline=true,rightline=false,topline=false,bottomline=false,%
+    innerleftmargin=10pt,innerrightmargin=8pt,%
+    innertopmargin=6pt,innerbottommargin=6pt,%
+    skipabove=4pt,skipbelow=6pt]%
+  \small\textbf{#1.}\enspace}%
+{\end{mdframed}\vspace{2pt}}
+
+\newenvironment{warnbox}[1][Warning]{%
+  \vspace{4pt}%
+  \begin{mdframed}[backgroundcolor=warnbg,linecolor=warnborder,linewidth=4pt,%
+    leftline=true,rightline=false,topline=false,bottomline=false,%
+    innerleftmargin=10pt,innerrightmargin=8pt,%
+    innertopmargin=6pt,innerbottommargin=6pt,%
+    skipabove=4pt,skipbelow=6pt]%
+  \small\color{accent}\textbf{#1.}\enspace}%
+{\end{mdframed}\vspace{2pt}}
+
+\newenvironment{takebox}{%
+  \vspace{6pt}%
+  \begin{mdframed}[backgroundcolor=takebg,linecolor=takeborder,linewidth=3pt,%
+    leftline=true,rightline=false,topline=false,bottomline=false,%
+    innerleftmargin=10pt,innerrightmargin=8pt,%
+    innertopmargin=8pt,innerbottommargin=8pt,%
+    skipabove=4pt,skipbelow=6pt]%
+  \small}%
+{\end{mdframed}\vspace{2pt}}
+
+\newenvironment{checkbox}{%
+  \vspace{4pt}%
+  \begin{mdframed}[backgroundcolor=checkbg,linecolor=checkborder,linewidth=3pt,%
+    leftline=true,rightline=false,topline=false,bottomline=false,%
+    innerleftmargin=10pt,innerrightmargin=8pt,%
+    innertopmargin=6pt,innerbottommargin=6pt,%
+    skipabove=4pt,skipbelow=6pt]%
+  \small}%
+{\end{mdframed}\vspace{2pt}}
+
+%% ── Helpers ──────────────────────────────────────────────────────────────────
+\newcommand{\screenshot}[2]{%
+  \begin{figure}[H]
+    \centering
+    \fbox{\includegraphics[width=0.96\linewidth]{#1}}%
+    \caption{#2}
+  \end{figure}}
+
+\newcommand{\ic}[1]{\texttt{\small\color{accent}#1}}
+\newcommand{\tool}[1]{\textbf{\color{accentblue}#1}}
+\newcommand{\flag}[1]{\texttt{\color{accentgreen}\bfseries#1}}
+
+%% ── List styles ──────────────────────────────────────────────────────────────
+\setlist[itemize]{leftmargin=14pt,itemsep=2pt,parsep=0pt,topsep=4pt,
+  label={\color{accent}\textbullet}}
+\setlist[enumerate]{leftmargin=16pt,itemsep=2pt,parsep=0pt,topsep=4pt}
+
+%% ═══════════════════════════════════════════════════════════════════════════
+\begin{document}
+
+%% ── TITLE PAGE ───────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \pagecolor{titlebg}\color{white}
+  \vspace*{2.5cm}
+  \begin{center}
+    {\fontsize{52}{60}\selectfont\bfseries eJPT}\\[8pt]
+    {\Large\color{rulecolor}eLearnSecurity Junior Penetration Tester}\\[4pt]
+    {\normalsize\color{midgrey}INE Course --- Personal Learning Journal}
+  \end{center}
+  \vspace{1.2cm}
+  {\color{accent}\rule{\linewidth}{2pt}}
+  \vspace{1cm}
+  \begin{center}
+    {\large\color{rulecolor}A complete technical reference covering:}\\[14pt]
+    \begin{tabular}{cl}
+      \color{accent}$\bullet$ & \color{white}Information Gathering \& Passive Reconnaissance \\[5pt]
+      \color{accent}$\bullet$ & \color{white}Network Scanning \& Service Enumeration \\[5pt]
+      \color{accent}$\bullet$ & \color{white}Vulnerability Assessment \& Nessus \\[5pt]
+      \color{accent}$\bullet$ & \color{white}SMB, WebDAV, Web \& Windows Exploitation \\[5pt]
+      \color{accent}$\bullet$ & \color{white}Post-Exploitation, Pivoting \& Credential Dumping \\[5pt]
+      \color{accent}$\bullet$ & \color{white}Full Lab Walkthroughs with Screenshots \\[5pt]
+      \color{accent}$\bullet$ & \color{white}CTF Writeups with Step-by-Step Attack Paths \\[5pt]
+    \end{tabular}
+  \end{center}
+  \vfill
+  {\color{accent}\rule{\linewidth}{1pt}}
+  \vspace{0.5cm}
+  \begin{center}
+    {\small\color{midgrey}Compiled from INE eJPT course labs, personal notes, and\\
+    practical exercises. Built for exam revision, interview prep, and long-term reference.}
+  \end{center}
+\end{titlepage}
+\pagecolor{white}\color{black}
+
+%% ── FRONT MATTER ─────────────────────────────────────────────────────────────
+\frontmatter
+
+\chapter*{How to Use This Document}
+\addcontentsline{toc}{chapter}{How to Use This Document}
+
+This is my personal technical journal built while working through the INE eJPT
+course. Every topic follows a consistent structure designed for revision, not just
+reading once.
+
+\textbf{Each topic covers:}
+\begin{itemize}
+  \item What it is --- short technical definition
+  \item Why it matters in pentesting
+  \item Attack flow and tools
+  \item Commands with inline explanations
+  \item Learning output: key takeaways, enumeration mindset, common mistakes,
+        real-world impact
+\end{itemize}
+
+\textbf{Callout box guide:}
+
+\begin{whybox}[Why this matters]
+Red left-border boxes explain the pentesting relevance of a tool or technique.
+\end{whybox}
+
+\begin{notebox}
+Yellow left-border boxes are personal observations or things the course specifically
+emphasised.
+\end{notebox}
+
+\begin{warnbox}
+Red warning boxes flag things that can break systems, cause detection, or have
+legal consequences if misused outside a lab.
+\end{warnbox}
+
+\begin{takebox}
+Blue boxes at the end of every section contain key takeaways, the enumeration mindset
+checklist, and common mistakes.
+\end{takebox}
+
+\tableofcontents
+\listoffigures
+
+%% ── MAIN MATTER ──────────────────────────────────────────────────────────────
+\mainmatter
+
+\part{Assessment Methodologies}
+\include{chapters/information_gathering}
+\include{chapters/footprinting_scanning}
+\include{chapters/enumeration}
+\include{chapters/vulnerability_assessment}
+
+\part{Host \& Network Auditing}
+\include{chapters/auditing}
+
+\part{Host \& Network Penetration Testing}
+\include{chapters/smb}
+\include{chapters/web_attacks}
+\include{chapters/windows_exploitation}
+\include{chapters/post_exploitation}
+
+\part{Lab Walkthroughs}
+\include{labs/lab_webdav_manual}
+\include{labs/lab_webdav_metasploit}
+\include{labs/lab_smb_psexec}
+
+\part{CTF Writeups}
+\include{ctfs/ctf1}
+\include{ctfs/ctf2}
+\include{ctfs/ctf3}
+\include{ctfs/ctf4}
+
+\end{document}

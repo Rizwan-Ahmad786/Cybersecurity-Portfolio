@@ -1,0 +1,270 @@
+\chapter{Information Gathering}
+\label{ch:info_gathering}
+
+Information gathering is the first phase of any penetration test. Before touching
+the target, I need to understand what I'm dealing with --- domains, IPs, services,
+infrastructure, and any publicly available information that reduces my attack surface
+from unknown to known.
+
+\begin{notebox}[Course emphasis]
+Always start with passive reconnaissance before moving to active reconnaissance.
+This is not just good practice --- it is the professional and legal way to approach
+an engagement.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Target Scoping}
+\label{sec:target_scoping}
+
+Before any testing begins, the client defines what is in scope. This is a legal
+and professional boundary.
+
+\textbf{What scope defines:}
+\begin{itemize}
+  \item A single domain (e.g., \ic{example.com}) or specific subdomains
+  \item One or more IP addresses or a full network range (e.g., \ic{192.168.1.0/24})
+  \item Specific services or applications to test
+  \item Time windows allowed for testing
+\end{itemize}
+
+\begin{warnbox}[Stay in scope]
+Testing outside the defined scope is illegal, even accidentally. Always confirm
+what you are allowed to touch before running any tool.
+\end{warnbox}
+
+\begin{takebox}
+\textbf{Key takeaway:} Scope definition saves you from legal liability and stops you
+from wasting time collecting data about systems you are not allowed to test.
+A client giving you \ic{192.168.1.0/24} does not mean you can touch \ic{10.0.0.1}.
+\end{takebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Passive vs Active Reconnaissance}
+\label{sec:passive_active_recon}
+
+\subsection{Passive Reconnaissance}
+
+Passive recon means collecting information without directly interacting with the
+target systems. No packets go to the target. This keeps you invisible.
+
+\textbf{Characteristics:}
+\begin{itemize}
+  \item No direct connection to target servers
+  \item Very low risk of detection
+  \item Always performed first
+\end{itemize}
+
+\textbf{What you can find passively:}
+\begin{itemize}
+  \item Domain registration information (WHOIS)
+  \item DNS records
+  \item Public website content
+  \item Search engine results (Google dorking)
+  \item Publicly available email addresses
+  \item Historical snapshots (Wayback Machine)
+  \item Data breach databases (HaveIBeenPwned)
+\end{itemize}
+
+\subsection{Active Reconnaissance}
+
+Active recon means sending traffic directly to the target. This is detectable. You
+do this only after passive recon has given you a clear picture of the attack surface.
+
+\textbf{Characteristics:}
+\begin{itemize}
+  \item Sends traffic to the target --- logs are created
+  \item Increased risk of detection
+  \item Typically performed after passive recon
+\end{itemize}
+
+\textbf{What you discover actively:}
+\begin{itemize}
+  \item Live hosts on a network
+  \item Open ports and running services
+  \item Service versions and banners
+  \item Network topology and responses
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Recon Strategy --- The Four-Step Approach}
+\label{sec:recon_strategy}
+
+I follow this every single engagement. It keeps me structured and stops me
+jumping into exploitation before I actually understand the target.
+
+\begin{enumerate}
+  \item \textbf{Define the Target} --- identify the domain, IP, or network range.
+        Confirm what is in scope.
+  \item \textbf{Perform Passive Reconnaissance} --- gather public information,
+        identify potential attack surfaces without touching the target.
+  \item \textbf{Perform Active Reconnaissance} --- scan for live hosts, open ports,
+        running services, and version information.
+  \item \textbf{Document Everything} --- record all findings before moving to
+        enumeration. What you skip here costs you later.
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Passive Recon Tools}
+\label{sec:passive_tools}
+
+\subsection{WHOIS --- Domain Registration Lookup}
+
+WHOIS returns registration data for a domain: registrar, owner contact details,
+name servers, and registration dates.
+
+\begin{whybox}[Why this matters]
+WHOIS can reveal the registrant's email, which can be used for OSINT, phishing
+context, or identifying admin contacts. Name server info helps with DNS enumeration.
+\end{whybox}
+
+
+
+
+
+
+
+\begin{termbox}
+whois target.com
+\end{termbox}
+
+\begin{takebox}
+
+\begin{whybox}[Why this matters]
+
+\begin{notebox}[Course emphasis]
+
+\screenshot{assets/images/Screenshot_2025-07-10_at_11.36.07_PM.png}{WHOIS lookup showing domain registration information}
+
+\subsection{host --- DNS Lookup}
+
+The \tool{host} command resolves a domain to its IP addresses and can retrieve
+different record types.
+
+\begin{termbox}
+host target.com            # A record (IPv4)
+host -t mx target.com      # Mail exchange records
+host -t ns target.com      # Name server records
+host -t txt target.com     # TXT records (SPF, DKIM, etc.)
+\end{termbox}
+
+\subsection{HaveIBeenPwned --- Breach Data}
+
+\url{https://haveibeenpwned.com} checks whether email addresses or domains appear
+in publicly known data breaches. Useful for understanding whether credentials for
+the target organisation may be circulating.
+
+\begin{notebox}
+If a company's email domain appears in breach data, assume some employee passwords
+are compromised. This is a starting point for credential stuffing attacks.
+\end{notebox}
+
+\subsection{Netcraft --- Website Footprinting}
+
+Netcraft (\url{https://sitereport.netcraft.com}) reveals:
+\begin{itemize}
+  \item Web server technology and version
+  \item Hosting provider and IP history
+  \item SSL certificate information
+  \item Risk rating
+\end{itemize}
+
+\subsection{DNS Recon}
+\label{subsec:dns_recon}
+
+\tool{dnsrecon} automates DNS enumeration --- it queries multiple record types and
+can perform zone transfer attempts.
+
+\begin{termbox}
+dnsrecon -d target.com           # Standard recon on domain
+dnsrecon -d target.com -t std    # Standard enumeration
+dnsrecon -d target.com -t zt     # Zone transfer attempt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-07-11_at_9.35.21_PM.png}{dnsrecon output showing DNS records for a target domain}
+
+\subsection{DNS Zone Transfer}
+\label{subsec:zone_transfer}
+
+A zone transfer (AXFR) is a DNS server mechanism that replicates DNS records to
+another server. If a DNS server is misconfigured to allow zone transfers from any
+IP, an attacker can retrieve the entire DNS zone --- all subdomains, IPs, and records.
+
+\begin{whybox}[Why attackers love this]
+A successful zone transfer hands you a complete map of the target's internal DNS
+infrastructure. Every subdomain, internal host, and IP in one response.
+\end{whybox}
+
+\begin{termbox}
+# Using dig to attempt a zone transfer
+dig axfr @ns1.target.com target.com
+
+# If internal nameserver is known
+dig axfr @internal_nameserver internal.target.com
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-07-17_at_5.03.20_PM.png}{DNS zone transfer attempt showing returned records}
+
+\subsection{Subdomain Enumeration with Sublist3r}
+
+\tool{Sublist3r} searches public sources for subdomains: search engines, certificate
+transparency logs, DNS databases.
+
+\begin{termbox}
+sublist3r -d target.com
+sublist3r -d target.com -o output.txt    # Save results
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-07-17_at_5.00.48_PM.png}{Sublist3r discovering subdomains for a target}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Learning Output}
+\label{sec:info_gathering_learning}
+
+\begin{takebox}
+\textbf{What I Learned}
+\begin{itemize}
+  \item Passive recon is more powerful than it looks --- WHOIS and DNS alone can
+        reveal internal infrastructure if zone transfers are misconfigured.
+  \item The order matters: passive first, active second. Jumping straight to nmap
+        before WHOIS means you might miss context that changes your whole approach.
+  \item Sublist3r + DNS recon together give a much fuller picture than either alone.
+\end{itemize}
+
+\textbf{Key Takeaways}
+\begin{itemize}
+  \item Always check WHOIS, DNS records, and Netcraft before touching the target.
+  \item Zone transfers are a quick win --- try them on every nameserver found.
+  \item HaveIBeenPwned is useful for understanding credential risk before you even
+        run a single scan.
+\end{itemize}
+
+\textbf{Enumeration Mindset --- What to Check First}
+\begin{enumerate}
+  \item WHOIS the domain --- who owns it, what name servers
+  \item \ic{host -t ns target.com} --- get the authoritative name servers
+  \item Attempt zone transfer on each name server
+  \item Run Sublist3r for subdomain discovery
+  \item Check Netcraft for server technology and hosting history
+\end{enumerate}
+
+\textbf{Common Mistakes}
+\begin{itemize}
+  \item Skipping passive recon and going straight to nmap --- noisy and unnecessary
+  \item Not documenting findings before moving on --- you will forget IP-to-hostname
+        mappings and regret it during exploitation
+  \item Assuming zone transfers always fail --- they succeed more often than expected
+        on misconfigured legacy infrastructure
+\end{itemize}
+
+\textbf{Real-World Impact}
+\begin{itemize}
+  \item If zone transfer succeeds: full internal network map, no guessing needed
+  \item Breach data exposure: existing credentials may work on the target
+  \item Subdomain discovery often reveals staging, dev, or admin portals not visible
+        from the main domain
+\end{itemize}
+\end{takebox}
+
+\end{notebox}
+\end{whybox}
+\end{takebox}

