@@ -34,6 +34,13 @@ The goal of this portfolio is to demonstrate practical offensive security skills
 - **Post-Exploitation:** Verified access, navigated the system, and retrieved the flag confirming successful compromise.
 - **Impact:** Demonstrates that exposed WinRM services combined with weak credentials provide a direct path to full system compromise without requiring traditional exploits.
 
+## Windows: UAC Bypass & Privilege Escalation (UACMe)
+
+* Objective: Escalate from a low-privilege Meterpreter session to NT AUTHORITY\SYSTEM by bypassing UAC on a Windows target.
+* Methodology: Identified Rejetto HFS 2.3x on port 80 via Nmap; exploited unauthenticated RCE using Metasploit's `rejetto_hfs_exec` module.
+* Exploitation: Migrated to a stable 64-bit process, confirmed UAC was restricting privilege elevation, generated a reverse payload with `msfvenom`, and bypassed UAC silently using UACMe (Akagi64.exe, method 23).
+* Post-Exploitation: Migrated into `lsass.exe` to inherit the SYSTEM token; executed `hashdump` to retrieve all local NTLM password hashes.
+* Impact: Demonstrates that an admin-group user with UAC active is not the same as full system control — and that UAC can be bypassed without any user interaction using publicly available tooling.
 
 ## Technical Focus Areas
 - **Network Penetration Testing:** SMB, RDP, HTTP/IIS, and service fingerprinting.
