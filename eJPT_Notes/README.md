@@ -40,12 +40,13 @@ The goal of this portfolio is to demonstrate practical offensive security skills
 * **Post-Exploitation:** Migrated into `lsass.exe` to inherit the SYSTEM token; executed `hashdump` to retrieve all local NTLM password hashes.
 * **Impact:** Demonstrates that admin group membership with UAC active does not equal full privileges — and UAC can be bypassed silently using public tooling.
 
-### Windows: Privilege Escalation via Token Impersonation (Incognito)
-* **Objective:** Abuse `SeImpersonatePrivilege` on a low-privilege service account to steal an Administrator delegation token and escalate without any exploit.
-* **Methodology:** Gained initial access via Rejetto HFS RCE; enumerated session privileges and identified `SeImpersonatePrivilege`; loaded the Incognito Meterpreter extension to list tokens in memory.
-* **Exploitation:** Identified an `ATTACKDEFENSE\Administrator` delegation token available in memory; impersonated it using `impersonate_token` — no exploit, no UAC bypass, no files uploaded.
-* **Post-Exploitation:** Migrated to a stable 64-bit process after token impersonation; confirmed full Administrator privilege set via `getprivs`.
-* **Impact:** Demonstrates that `SeImpersonatePrivilege` on a service account is a critical escalation path. Token impersonation is stealthier than exploit-based escalation and leaves minimal forensic footprint.
+## Windows: Privilege Escalation via Token Impersonation (Incognito)
+
+* **Objective: Abuse SeImpersonatePrivilege on a low-privilege service account to steal an Administrator delegation token and escalate without any exploit or additional payload.
+* **Methodology: Gained initial access via Rejetto HFS 2.3x RCE (rejetto_hfs_exec); enumerated session privileges and identified * **SeImpersonatePrivilege; confirmed Explorer migration was blocked at this privilege level; loaded the Incognito Meterpreter extension to list tokens available in memory.
+* **Exploitation: Identified an ATTACKDEFENSE\Administrator delegation token in memory; impersonated it using impersonate_token — no exploit, no UAC bypass, no files uploaded for the escalation step. Migration to Explorer succeeded after impersonation, confirming the elevated token was active.
+* **Post-Exploitation: Verified full Administrator privilege set via getprivs; navigated the filesystem to C:\Documents and Settings\Administrator\Desktop (older Windows profile path) and retrieved flag.txt, confirming complete system compromise.
+* **Impact: Demonstrates that SeImpersonatePrivilege on a service account is a critical and often overlooked escalation path. Token impersonation abuses a legitimate Windows feature, leaving no exploit payload on disk — making it significantly harder to detect than UAC bypass or exploit-based escalation methods.
 
 ---
 
