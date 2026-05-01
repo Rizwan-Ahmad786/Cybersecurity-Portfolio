@@ -48,6 +48,15 @@ The goal of this portfolio is to demonstrate practical offensive security skills
 * **Post-Exploitation: Verified full Administrator privilege set via getprivs; navigated the filesystem to C:\Documents and Settings\Administrator\Desktop (older Windows profile path) and retrieved flag.txt, confirming complete system compromise.
 * **Impact: Demonstrates that SeImpersonatePrivilege on a service account is a critical and often overlooked escalation path. Token impersonation abuses a legitimate Windows feature, leaving no exploit payload on disk — making it significantly harder to detect than UAC bypass or exploit-based escalation methods.
 
+
+### Windows: Privilege Escalation via Unattended Installation Credentials
+
+* **Objective:** Escalate from a low-privilege student account to Administrator by discovering and abusing credentials left behind in a Windows unattended installation answer file.
+* **Methodology:** Confirmed low-privilege context with `whoami`; ran `Invoke-PrivescAudit` from PowerUp.ps1 (PowerSploit) to audit the system for misconfigurations; identified a leftover `Unattend.xml` file at `C:\Windows\Panther\` containing AutoLogon credentials for the Administrator account.
+* **Exploitation:** Read `Unattend.xml` to extract the Base64-encoded Administrator password; decoded it using PowerShell's `System.Convert` class to recover the plaintext credential `Admin@123`; used `runas.exe` to spawn an elevated `cmd.exe` under the Administrator account.
+* **Payload Delivery:** Used Metasploit's `hta_server` exploit on Kali to host a malicious HTA payload over HTTP; executed it on the Windows machine using the built-in `mshta.exe` binary (LOLBin) from the Administrator cmd — no custom binary written to disk.
+* **Post-Exploitation:** Received Meterpreter session with full Administrator privileges; verified with `sysinfo`, `getuid`, and `getprivs`; retrieved `flag.txt` from `C:\Users\Administrator\Desktop`.
+* **Impact:** Demonstrates that unattended installation files left on disk represent a direct, zero-exploit path to full Administrator access. Base64 encoding provides no real protection — credentials stored this way are immediately recoverable by any user with filesystem read access.
 ---
 
 ## Technical Focus Areas
