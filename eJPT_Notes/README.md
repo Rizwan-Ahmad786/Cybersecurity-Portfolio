@@ -1,11 +1,3 @@
-# Cybersecurity Portfolio
-
-This repository contains my hands-on cybersecurity labs and penetration testing practice work. Each lab documents my methodology, mindset, and findings in a structured, professional format.
-
-The goal of this portfolio is to demonstrate practical offensive security skills developed during my eJPT preparation and hands-on laboratory engagements.
-
----
-
 ## eJPT Certification Labs
 
 ### Windows: Insecure RDP Service (Non-Standard Port)
