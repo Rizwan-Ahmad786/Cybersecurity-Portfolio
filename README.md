@@ -68,6 +68,14 @@ The goal of this portfolio is to demonstrate practical offensive security skills
 * **Post-Exploitation:** Downloaded `secret.txt` using the `get` command and read the flag locally with `cat`.
 * **Impact:** FTP services with weak credentials and no account lockout policy are trivially brute-forced. Standard FTP also transmits credentials in plaintext, meaning any successful login on an unencrypted network is visible to anyone monitoring traffic.
 
+
+### Linux: SSH Credential Brute-Force with Metasploit (Two Post-Exploitation Methods)
+* **Objective:** Identify an exposed SSH service, enumerate the version, recover valid credentials through Metasploit brute-force, and retrieve the flag using two documented post-exploitation approaches.
+* **Methodology:** Confirmed target with ping and noted Linux TTL; ran Nmap to identify SSH on port 22; created a dedicated Metasploit workspace; used `ssh_version` to confirm password authentication is enabled; configured `ssh_login` with `common_users.txt` and `common_passwords.txt` using `STOP_ON_SUCCESS true` and `VERBOSE false`.
+* **Exploitation:** Recovered valid credentials for the `sysadmin` account; Metasploit automatically opened an SSH session on success.
+* **Post-Exploitation Method 1:** Used `sessions -i 1` to interact with the auto-opened Metasploit session; ran `find / -name "flag"` to locate the flag without manual navigation; read it with `cat`.
+* **Post-Exploitation Method 2:** Used recovered credentials with the standard `ssh` command in a terminal; navigated the filesystem manually with `cd` and `dir`; read the flag directly.
+* **Impact:** SSH with weak credentials and no lockout policy is as vulnerable to brute-force as any cleartext service. Knowing both the Metasploit session approach and manual SSH login provides flexibility across different engagement scenarios.
 ---
 
 ## Technical Focus Areas
