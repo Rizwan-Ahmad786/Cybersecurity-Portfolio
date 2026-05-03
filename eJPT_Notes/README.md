@@ -61,6 +61,13 @@ The goal of this portfolio is to demonstrate practical offensive security skills
 * **Target 2 - SMB (Flags 3 and 4):** Confirmed SMB on port 445 via Nmap; used Metasploit `smb_login` to brute-force credentials and recover the Administrator account password. Used `exploit/windows/smb/psexec` to establish a Meterpreter session; dropped to shell and retrieved Flag 3 from `C:\` and Flag 4 from `C:\Users\Administrator\Desktop`.
 * **Impact:** Demonstrates a full multi-target engagement across two different protocols and attack surfaces. Both flag chains required zero CVE exploitation. All access was gained through credential abuse and misconfiguration, which reflects the most common real-world attack path in enterprise environments.
 
+### Linux: Samba Recon: Dictionary Attack
+
+Objective: Recover credentials for multiple Samba user accounts via dictionary attacks, enumerate share permissions, retrieve a hidden flag, and extract SMB internals including named pipes and user SIDs.
+Methodology: Service fingerprinting with nmap -sV, followed by credential brute-force using Metasploit's smb_login module and Hydra against separate accounts with different wordlists, then systematic share enumeration with smbmap and smbclient.
+Exploitation: smb_login with unix_passwords.txt cracked the jane account; Hydra with rockyou.txt cracked the admin account; both attacks succeeded due to weak password choices on Unix-backed Samba accounts.
+Post-Exploitation: Authenticated to the admin share via smbclient, navigated into a non-obvious hidden subdirectory, retrieved and extracted flag.tar.gz; used Metasploit's pipe_auditor to list accessible named pipes; ran enum4linux -r to perform RID cycling and resolve SIDs for all four user accounts.
+Impact: Weak SMB credentials on a Samba server expose not just file shares but also IPC endpoints and the complete internal user roster, providing an attacker with persistent enumeration capability and potential lateral movement paths.
 ---
 
 ## Technical Focus Areas
