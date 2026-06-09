@@ -2,7 +2,7 @@
 
 **eJPT v2 — 91% | INE Security | May 2026**  
 MSc Cybersecurity, University of Sheffield (Merit, Full Scholarship)  
-9 months penetration testing at AT Tech (healthtech environment)  
+11 months security engineering at AT Tech in an NHS-adjacent healthtech environment.  
 [linkedin.com/in/rizwan-ahmad-cybersecurity](https://linkedin.com/in/rizwan-ahmad-cybersecurity)
 
 ---
