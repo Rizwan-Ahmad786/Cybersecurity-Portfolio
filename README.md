@@ -1,8 +1,9 @@
 # Cybersecurity Portfolio — Rizwan Ahmad
 
 **eJPT v2 — 91% | INE Security | May 2026**  
+**Certified in Cybersecurity | ISC2 | July 2026**
 MSc Cybersecurity, University of Sheffield (Merit, Full Scholarship)  
-11 months security engineering at AT Tech in an NHS-adjacent healthtech environment.  
+09 months security engineering at AT Tech in an NHS-adjacent healthtech environment.  
 [linkedin.com/in/rizwan-ahmad-cybersecurity](https://linkedin.com/in/rizwan-ahmad-cybersecurity)
 
 ---
@@ -12,6 +13,7 @@ MSc Cybersecurity, University of Sheffield (Merit, Full Scholarship)
 | Certification | Score | Date | Provider |
 |--------------|-------|------|----------|
 | eJPT v2 | 91% | May 2026 | INE Security |
+| Certified in Cybersecurity | Pass | July 2026 | ISC2 |
 | CRTO | In Progress | 2026 | Zero-Point Security |
 
 ---
