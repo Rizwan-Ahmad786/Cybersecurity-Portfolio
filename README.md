@@ -1,9 +1,11 @@
 # Cybersecurity Portfolio — Rizwan Ahmad
 
+Junior cybersecurity professional focused on penetration testing and vulnerability assessment. Portfolio demonstrating hands-on experience across web application security, Windows/Linux exploitation, privilege escalation, network attacks, and remediation-focused reporting.
+
 **eJPT v2 — 91% | INE Security | May 2026**  
 **Certified in Cybersecurity | ISC2 | July 2026**
 MSc Cybersecurity, University of Sheffield (Merit, Full Scholarship)  
-09 months security engineering at AT Tech in an NHS-adjacent healthtech environment.  
+Security engineering experience at AT Tech supporting NHS-integrated healthcare applications.  
 [linkedin.com/in/rizwan-ahmad-cybersecurity](https://linkedin.com/in/rizwan-ahmad-cybersecurity)
 
 ---
