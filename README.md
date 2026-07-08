@@ -16,7 +16,7 @@ Security engineering experience at AT Tech supporting NHS-integrated healthcare 
 |--------------|-------|------|----------|
 | eJPT v2 | 91% | May 2026 | INE Security |
 | Certified in Cybersecurity | Pass | July 2026 | ISC2 |
-| CRTO | In Progress | 2026 | Zero-Point Security |
+| CPTS | In Progress | 2026 | Hack The Box |
 
 ---
 
