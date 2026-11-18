@@ -4,8 +4,8 @@ Junior cybersecurity professional focused on penetration testing and vulnerabili
 
 **eJPT v2 — 91% | INE Security | May 2026**  
 **Certified in Cybersecurity | ISC2 | July 2026**
-MSc Cybersecurity, University of Sheffield (Merit, Full Scholarship)  
-Security engineering experience at AT Tech supporting NHS-integrated healthcare applications.  
+**MSc Cybersecurity and AI, University of Sheffield (Merit, Full Scholarship)**
+**Security engineering experience at AT Tech supporting NHS-integrated healthcare applications**.  
 [linkedin.com/in/rizwan-ahmad-cybersecurity](https://linkedin.com/in/rizwan-ahmad-cybersecurity)
 
 ---
@@ -16,8 +16,6 @@ Security engineering experience at AT Tech supporting NHS-integrated healthcare 
 |--------------|-------|------|----------|
 | eJPT v2 | 91% | May 2026 | INE Security |
 | Certified in Cybersecurity | Pass | July 2026 | ISC2 |
-| CPTS | In Progress | 2026 | Hack The Box |
-
 ---
 
 ## Lab Writeups
