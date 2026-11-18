@@ -1,6 +1,6 @@
 # Cybersecurity Portfolio — Rizwan Ahmad
 
-Junior cybersecurity professional focused on penetration testing and vulnerability assessment. Portfolio demonstrating hands-on experience across web application security, Windows/Linux exploitation, privilege escalation, network attacks, and remediation-focused reporting.
+Junior cyber security analyst with an MSc in Cybersecurity and AI, focused on vulnerability assessment and on understanding how attacks work so they can be detected and fixed. This portfolio documents hands-on lab and CTF work across web applications, Windows and Linux systems, privilege escalation and network attacks, with remediation advice in the write-ups.
 
 **eJPT v2 — 91% | INE Security | May 2026**
 
